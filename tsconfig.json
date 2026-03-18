@@ -19,13 +19,16 @@
       "@mflow/signaling/*": ["./packages/signaling/src/*"],
       "@mflow/cli": ["./packages/cli/src"],
       "@mflow/cli/*": ["./packages/cli/src/*"]
-    }
+    },
+    "@mflow/mcp": ["./packages/mcp/src"],
+    "@mflow/mcp/*": ["./packages/mcp/src/*"]
   },
   "references": [
     { "path": "packages/shared" },
     { "path": "packages/daemon" },
     { "path": "packages/signaling" },
-    { "path": "packages/cli" }
+    { "path": "packages/cli" },
+    { "path": "packages/mcp" }
   ],
   "files": [],
   "exclude": ["node_modules", "dist"]
