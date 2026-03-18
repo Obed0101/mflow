@@ -7,9 +7,11 @@
 import { MflowDaemon } from "../daemon/src/daemon.js";
 import { IPCServer, type IPCHandler } from "../daemon/src/ipc.js";
 import { WSRelayTransport } from "../daemon/src/ws-relay-transport.js";
-import type { IPCResponse } from "@mflow/shared";
+import { WeriftTransport } from "../daemon/src/transport.js";
+import type { ITransport, IPCResponse } from "@mflow/shared";
 import {
   DEFAULT_SIGNALING_URL,
+  DEFAULT_STUN_SERVERS,
   RECONNECT_MAX_DELAY_MS,
   MFLOW_SOCK_FILE,
 } from "@mflow/shared";
@@ -26,6 +28,7 @@ const { values } = parseArgs({
     room: { type: "string", default: process.env["MFLOW_ROOM"] ?? "" },
     secret: { type: "string", default: process.env["MFLOW_SECRET"] ?? "" },
     signaling: { type: "string", default: process.env["MFLOW_SIGNALING"] ?? DEFAULT_SIGNALING_URL },
+    transport: { type: "string", default: process.env["MFLOW_TRANSPORT"] ?? "relay" },
   },
 });
 
@@ -33,18 +36,33 @@ const projectRoot = values.root!;
 const roomId = values.room!;
 const secret = values.secret!;
 const signalingUrl = values.signaling!;
+const transportType = values.transport! as "relay" | "p2p";
 const peerId = crypto.randomUUID();
 const peerName = `${hostname()}-${process.pid}`;
 
 // ─── Create Transport ────────────────────────────────────────
 
-const transport = new WSRelayTransport({
-  peerId,
-  peerName,
-  peerType: "agent",
-  signalingUrl,
-  reconnectMaxDelayMs: RECONNECT_MAX_DELAY_MS,
-});
+function createTransport(): ITransport {
+  if (transportType === "p2p") {
+    return new WeriftTransport({
+      peerId,
+      peerName,
+      peerType: "agent",
+      signalingUrl,
+      stunServers: DEFAULT_STUN_SERVERS,
+      reconnectMaxDelayMs: RECONNECT_MAX_DELAY_MS,
+    });
+  }
+  return new WSRelayTransport({
+    peerId,
+    peerName,
+    peerType: "agent",
+    signalingUrl,
+    reconnectMaxDelayMs: RECONNECT_MAX_DELAY_MS,
+  });
+}
+
+const transport = createTransport();
 
 // ─── Create Daemon ───────────────────────────────────────────
 

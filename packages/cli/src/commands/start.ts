@@ -12,9 +12,13 @@ import { ensureMflowDir } from "./init.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
+type TransportType = "relay" | "p2p";
+
 interface StartOptions {
   room?: string;
   secret?: string;
+  signaling?: string;
+  transport?: TransportType;
 }
 
 // ─── Start Command ──────────────────────────────────────────
@@ -53,17 +57,24 @@ export async function startCommand(
     console.log("");
   }
 
+  const signaling = options.signaling ?? "";
+  const transport = options.transport ?? "relay";
+
   // Spawn daemon as detached background process
   const daemonEntry = resolve(
     import.meta.dirname ?? new URL(".", import.meta.url).pathname,
     "../../daemon-entry.ts",
   );
 
+  // Build args
+  const args = ["run", daemonEntry, "--root", projectRoot, "--room", room, "--secret", secret];
+  if (signaling) args.push("--signaling", signaling);
+
   // Use Bun to run the daemon entry point
   // The daemon module is @mflow/daemon — we launch it via a minimal entry script
   const daemonProc = spawn(
     "bun",
-    ["run", daemonEntry, "--root", projectRoot, "--room", room, "--secret", secret],
+    args,
     {
       detached: true,
       stdio: "ignore",
@@ -72,6 +83,8 @@ export async function startCommand(
         MFLOW_PROJECT_ROOT: projectRoot,
         MFLOW_ROOM: room,
         MFLOW_SECRET: secret,
+        MFLOW_TRANSPORT: transport,
+        ...(signaling ? { MFLOW_SIGNALING: signaling } : {}),
       },
     },
   );

@@ -32,7 +32,9 @@ program
   .description("Start sync daemon and join a room")
   .option("-r, --room <name>", "Room name (default: derived from git remote + branch)")
   .option("-s, --secret <key>", "Shared secret for encryption")
-  .action(async (opts: { room?: string; secret?: string }) => {
+  .option("--signaling <url>", "Signaling server URL")
+  .option("-t, --transport <type>", "Transport type: relay (default) or p2p", "relay")
+  .action(async (opts: { room?: string; secret?: string; signaling?: string; transport?: "relay" | "p2p" }) => {
     try {
       await startCommand(getProjectRoot(), opts);
     } catch (err) {
