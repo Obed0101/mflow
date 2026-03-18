@@ -329,6 +329,20 @@ export class SyncOrchestrator extends EventEmitter {
     if (this.transport.getConnectionState() === "connected") {
       this.setState("syncing");
     }
+
+    // Also watch for transport connection state changes
+    // Poll every 500ms until connected (transport doesn't emit events)
+    const connectionPoll = setInterval(() => {
+      if (this._state === "stopping") {
+        clearInterval(connectionPoll);
+        return;
+      }
+      const connState = this.transport.getConnectionState();
+      if (connState === "connected" && (this._state === "scanning" || this._state === "connecting")) {
+        this.setState("syncing");
+        clearInterval(connectionPoll);
+      }
+    }, 500);
   }
 
   /**

@@ -127,4 +127,13 @@ export class RoomManager {
   findPeer(roomId: string, peerId: string): ServerWebSocket<PeerContext> | undefined {
     return this.rooms.get(roomId)?.peers.get(peerId);
   }
+
+  /**
+   * Get all peer WebSockets in a room.
+   */
+  getRoomPeers(roomId: string): ServerWebSocket<PeerContext>[] {
+    const room = this.rooms.get(roomId);
+    if (!room) return [];
+    return Array.from(room.peers.values());
+  }
 }

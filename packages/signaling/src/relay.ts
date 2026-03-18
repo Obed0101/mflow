@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import type { SignalingSignal } from "@mflow/shared";
+import type { SignalingSignal, SignalingRelay } from "@mflow/shared";
 import type { PeerContext, RoomManager } from "./rooms.js";
 
 // ─── Relay ──────────────────────────────────────────────────
@@ -37,5 +37,52 @@ export function relaySignal(
     }),
   );
 
+  return { ok: true };
+}
+
+/**
+ * Relay opaque encrypted data between peers.
+ * If `to` is "*", broadcasts to all other peers in the room (not the sender).
+ * Otherwise, forwards to the specific target peer.
+ */
+export function relayData(
+  rooms: RoomManager,
+  ws: ServerWebSocket<PeerContext>,
+  msg: SignalingRelay,
+): { ok: true } | { ok: false; code: "PEER_NOT_FOUND"; message: string } {
+  const { roomId } = ws.data;
+  if (!roomId) {
+    return { ok: false, code: "PEER_NOT_FOUND", message: "Not in a room" };
+  }
+
+  const envelope = JSON.stringify({
+    type: "relay",
+    to: msg.to,
+    from: ws.data.peerId,
+    data: msg.data,
+  });
+
+  if (msg.to === "*") {
+    // Broadcast to all peers in the room except the sender
+    const peers = rooms.getRoomPeers(roomId);
+    for (const peerWs of peers) {
+      if (peerWs.data.peerId !== ws.data.peerId) {
+        peerWs.send(envelope);
+      }
+    }
+    return { ok: true };
+  }
+
+  // Unicast to a specific peer
+  const targetWs = rooms.findPeer(roomId, msg.to);
+  if (!targetWs) {
+    return {
+      ok: false,
+      code: "PEER_NOT_FOUND",
+      message: `Peer ${msg.to} not found in room`,
+    };
+  }
+
+  targetWs.send(envelope);
   return { ok: true };
 }

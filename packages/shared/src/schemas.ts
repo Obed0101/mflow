@@ -98,9 +98,17 @@ export const SignalingSignalSchema = z.object({
   }),
 });
 
+export const SignalingRelaySchema = z.object({
+  type: z.literal("relay"),
+  to: z.string().min(1),
+  from: z.string().min(1),
+  data: z.string().min(1), // base64-encoded encrypted binary
+});
+
 export const SignalingMessageSchema = z.discriminatedUnion("type", [
   SignalingJoinSchema,
   SignalingSignalSchema,
+  SignalingRelaySchema,
   z.object({ type: z.literal("peer-joined"), peer: z.any() }),
   z.object({ type: z.literal("peer-left"), peerId: z.string() }),
   z.object({

@@ -13,3 +13,4 @@ export { SyncOrchestrator, type SyncOrchestratorEvents, type SyncOrchestratorOpt
 export { IPCServer, type IPCServerOptions, type IPCHandler } from "./ipc.js";
 export { MflowDaemon, type DaemonOptions, type DaemonEvents } from "./daemon.js";
 export { WeriftTransport, type WeriftTransportOptions } from "./transport.js";
+export { WSRelayTransport, type WSRelayTransportOptions } from "./ws-relay-transport.js";

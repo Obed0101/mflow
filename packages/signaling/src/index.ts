@@ -2,11 +2,12 @@ import type { ServerWebSocket } from "bun";
 import {
   SignalingJoinSchema,
   SignalingSignalSchema,
+  SignalingRelaySchema,
 } from "@mflow/shared";
 import type { HealthResponse } from "@mflow/shared";
 import { RoomManager, type PeerContext } from "./rooms.js";
 import { RateLimiter } from "./ratelimit.js";
-import { relaySignal } from "./relay.js";
+import { relaySignal, relayData } from "./relay.js";
 
 // ─── State ──────────────────────────────────────────────────
 
@@ -68,6 +69,9 @@ function handleMessage(
       break;
     case "signal":
       handleSignal(ws, data);
+      break;
+    case "relay":
+      handleRelay(ws, data);
       break;
     default:
       sendError(ws, "INVALID_MESSAGE", `Unknown message type: ${msgType}`);
@@ -152,6 +156,21 @@ function handleSignal(ws: ServerWebSocket<PeerContext>, data: unknown): void {
   }
 
   const result = relaySignal(rooms, ws, parsed.data);
+  if (!result.ok) {
+    sendError(ws, result.code, result.message);
+  }
+}
+
+// ─── Relay Handler ──────────────────────────────────────────
+
+function handleRelay(ws: ServerWebSocket<PeerContext>, data: unknown): void {
+  const parsed = SignalingRelaySchema.safeParse(data);
+  if (!parsed.success) {
+    sendError(ws, "INVALID_MESSAGE", `Invalid relay message: ${parsed.error.message}`);
+    return;
+  }
+
+  const result = relayData(rooms, ws, parsed.data);
   if (!result.ok) {
     sendError(ws, result.code, result.message);
   }

@@ -1,4 +1,3 @@
-import { RTCPeerConnection, RTCIceCandidate } from "werift";
 import type {
   ITransport,
   AwarenessData,
@@ -6,10 +5,7 @@ import type {
   PeerType,
   ConnectionState,
   CipherFrame,
-} from "@mflow/shared";
-import type {
   SignalingMessage,
-  RTCSignalData,
 } from "@mflow/shared";
 import {
   deriveKeys,
@@ -27,27 +23,18 @@ import {
 
 const FRAME_TYPE_YJS_UPDATE = 0x01;
 const FRAME_TYPE_AWARENESS = 0x02;
-const DATA_CHANNEL_LABEL = "mflow";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 // ─── Types ────────────────────────────────────────────────────
 
-export interface WeriftTransportOptions {
+export interface WSRelayTransportOptions {
   peerId: string;
   peerName: string;
   peerType: PeerType;
   signalingUrl: string;
-  stunServers: string[];
   reconnectMaxDelayMs: number;
-}
-
-interface PeerConnection {
-  pc: RTCPeerConnection;
-  dc: ReturnType<RTCPeerConnection["createDataChannel"]> | null;
-  peerInfo: PeerInfo;
-  ready: boolean;
 }
 
 // ─── Binary Frame Protocol ───────────────────────────────────
@@ -130,31 +117,50 @@ function extractCounter(nonce: Uint8Array): bigint {
   return view.getBigUint64(0, false);
 }
 
-// ─── WeriftTransport ─────────────────────────────────────────
+// ─── Base64 Helpers ─────────────────────────────────────────
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// ─── WSRelayTransport ───────────────────────────────────────
 
 /**
- * WebRTC transport layer using werift (pure-TypeScript WebRTC).
+ * WebSocket relay transport that implements ITransport by sending
+ * encrypted messages through the signaling server.
  *
- * Full mesh topology: every peer connects to every other peer.
- * All data channel payloads are encrypted with AES-256-GCM.
+ * All payloads are E2E encrypted (AES-256-GCM). The server is a
+ * dumb pipe that never sees plaintext. Messages are base64-encoded
+ * because the signaling protocol uses JSON text frames.
  */
-export class WeriftTransport implements ITransport {
+export class WSRelayTransport implements ITransport {
   // Options
   private readonly peerId: string;
   private readonly peerName: string;
   private readonly peerType: PeerType;
   private readonly signalingUrl: string;
-  private readonly stunServers: string[];
   private readonly reconnectMaxDelayMs: number;
 
   // Internal state
   private ws: WebSocket | null = null;
-  private peers: Map<string, PeerConnection> = new Map();
+  private peers: Map<string, PeerInfo> = new Map();
   private connectionState: ConnectionState = "disconnected";
   private encKey: CryptoKey | null = null;
   private roomId = "";
   private authHash = "";
-  private secret = "";
   private nonceCounter = new NonceCounter();
 
   // Callbacks
@@ -170,12 +176,14 @@ export class WeriftTransport implements ITransport {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
-  constructor(options: WeriftTransportOptions) {
+  // Secret stored for reconnect
+  private secret = "";
+
+  constructor(options: WSRelayTransportOptions) {
     this.peerId = options.peerId;
     this.peerName = options.peerName;
     this.peerType = options.peerType;
     this.signalingUrl = options.signalingUrl;
-    this.stunServers = options.stunServers;
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs;
   }
 
@@ -198,11 +206,6 @@ export class WeriftTransport implements ITransport {
   async disconnect(): Promise<void> {
     this.disposed = true;
     this.clearReconnectTimer();
-
-    // Close all peer connections
-    for (const [peerId, peer] of this.peers) {
-      await this.closePeerConnection(peerId, peer);
-    }
     this.peers.clear();
 
     // Close WebSocket
@@ -225,7 +228,7 @@ export class WeriftTransport implements ITransport {
     void encrypt(this.encKey, update, this.peerId, counter, aad).then(
       (frame) => {
         const encoded = encodeFrame(FRAME_TYPE_YJS_UPDATE, fileId, frame);
-        this.broadcastToDataChannels(encoded);
+        this.sendRelay("*", encoded);
       },
     );
   }
@@ -246,7 +249,7 @@ export class WeriftTransport implements ITransport {
     void encrypt(this.encKey, serialized, this.peerId, counter, aad).then(
       (frame) => {
         const encoded = encodeFrame(FRAME_TYPE_AWARENESS, "", frame);
-        this.broadcastToDataChannels(encoded);
+        this.sendRelay("*", encoded);
       },
     );
   }
@@ -258,11 +261,7 @@ export class WeriftTransport implements ITransport {
   }
 
   getPeers(): PeerInfo[] {
-    const result: PeerInfo[] = [];
-    for (const peer of this.peers.values()) {
-      result.push(peer.peerInfo);
-    }
-    return result;
+    return Array.from(this.peers.values());
   }
 
   getConnectionState(): ConnectionState {
@@ -309,8 +308,6 @@ export class WeriftTransport implements ITransport {
     ws.addEventListener("close", () => {
       this.ws = null;
       if (!this.disposed) {
-        // WebRTC connections survive signaling loss; only set reconnecting
-        // if we were in a connected state
         if (
           this.connectionState === "connected" ||
           this.connectionState === "connecting"
@@ -337,8 +334,8 @@ export class WeriftTransport implements ITransport {
       case "peer-left":
         this.handlePeerLeft(msg.peerId);
         break;
-      case "signal":
-        void this.handleSignal(msg.from, msg.data);
+      case "relay":
+        void this.handleRelayMessage(msg.from, msg.data);
         break;
       case "error":
         // Signaling errors — do not attempt reconnect for auth failures
@@ -353,194 +350,42 @@ export class WeriftTransport implements ITransport {
   private handleJoined(existingPeers: PeerInfo[]): void {
     this.setConnectionState("connected");
 
-    // Create WebRTC connections to all existing peers
+    // Track existing peers
     for (const peer of existingPeers) {
       if (peer.peerId === this.peerId) continue;
-      void this.createPeerConnection(peer, this.shouldCreateOffer(peer.peerId));
+      this.peers.set(peer.peerId, peer);
     }
   }
 
   private handlePeerJoined(peer: PeerInfo): void {
     if (peer.peerId === this.peerId) return;
-    void this.createPeerConnection(peer, this.shouldCreateOffer(peer.peerId));
+    this.peers.set(peer.peerId, peer);
   }
 
   private handlePeerLeft(peerId: string): void {
-    const peer = this.peers.get(peerId);
-    if (peer) {
-      void this.closePeerConnection(peerId, peer);
-      this.peers.delete(peerId);
-    }
+    this.peers.delete(peerId);
   }
 
-  private async handleSignal(
+  // ─── Relay Message Handling ──────────────────────────────
+
+  private async handleRelayMessage(
     fromPeerId: string,
-    signal: RTCSignalData,
-  ): Promise<void> {
-    let peerConn = this.peers.get(fromPeerId);
-
-    // If we receive an offer from an unknown peer, create a connection for them
-    if (!peerConn && signal.type === "offer") {
-      const peerInfo: PeerInfo = {
-        peerId: fromPeerId,
-        peerName: "",
-        peerType: "agent",
-        joinedAt: Date.now(),
-      };
-      await this.createPeerConnection(peerInfo, false);
-      peerConn = this.peers.get(fromPeerId);
-    }
-
-    if (!peerConn) return;
-
-    const { pc } = peerConn;
-
-    switch (signal.type) {
-      case "offer":
-        await pc.setRemoteDescription({
-          type: "offer",
-          sdp: signal.sdp,
-        });
-        {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          this.sendSignal(fromPeerId, {
-            type: "answer",
-            sdp: answer.sdp,
-          });
-        }
-        break;
-
-      case "answer":
-        await pc.setRemoteDescription({
-          type: "answer",
-          sdp: signal.sdp,
-        });
-        break;
-
-      case "candidate":
-        if (signal.candidate) {
-          // werift accepts the candidate object directly
-          await pc.addIceCandidate(signal.candidate as unknown as RTCIceCandidate);
-        }
-        break;
-    }
-  }
-
-  // ─── WebRTC Peer Connections ────────────────────────────
-
-  /**
-   * Determine who creates the offer.
-   * The peer with the lexicographically smaller peerId creates the offer.
-   */
-  private shouldCreateOffer(remotePeerId: string): boolean {
-    return this.peerId < remotePeerId;
-  }
-
-  private async createPeerConnection(
-    peerInfo: PeerInfo,
-    createOffer: boolean,
-  ): Promise<void> {
-    // Don't recreate if we already have a connection
-    if (this.peers.has(peerInfo.peerId)) return;
-
-    const iceServers = this.stunServers.map((url) => ({ urls: url }));
-
-    const pc = new RTCPeerConnection({
-      iceServers,
-    });
-
-    const conn: PeerConnection = {
-      pc,
-      dc: null,
-      peerInfo,
-      ready: false,
-    };
-
-    this.peers.set(peerInfo.peerId, conn);
-
-    // Handle ICE candidates
-    pc.onIceCandidate.subscribe((candidate) => {
-      // werift ICE candidates are already plain objects with candidate/sdpMid/sdpMLineIndex
-      const c = candidate as unknown as { candidate: string; sdpMid: string | null; sdpMLineIndex: number | null };
-      this.sendSignal(peerInfo.peerId, {
-        type: "candidate",
-        candidate: {
-          candidate: c.candidate ?? String(candidate),
-          sdpMid: c.sdpMid ?? null,
-          sdpMLineIndex: c.sdpMLineIndex ?? null,
-        },
-      });
-    });
-
-    // Handle connection state changes
-    pc.connectionStateChange.subscribe((state) => {
-      if (state === "connected") {
-        conn.ready = true;
-      } else if (state === "disconnected" || state === "failed" || state === "closed") {
-        conn.ready = false;
-        if (state === "failed" && !this.disposed) {
-          // Attempt reconnection for failed connections
-          this.peers.delete(peerInfo.peerId);
-          void pc.close();
-          void this.createPeerConnection(peerInfo, this.shouldCreateOffer(peerInfo.peerId));
-        }
-      }
-    });
-
-    // Handle incoming data channels (remote peer created it)
-    pc.onDataChannel.subscribe((dc) => {
-      if (dc.label === DATA_CHANNEL_LABEL) {
-        conn.dc = dc;
-        this.setupDataChannel(dc, peerInfo.peerId);
-      }
-    });
-
-    if (createOffer) {
-      // We create the data channel and offer
-      const dc = pc.createDataChannel(DATA_CHANNEL_LABEL, {
-        ordered: true,
-      });
-      conn.dc = dc;
-      this.setupDataChannel(dc, peerInfo.peerId);
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      this.sendSignal(peerInfo.peerId, {
-        type: "offer",
-        sdp: offer.sdp,
-      });
-    }
-  }
-
-  private setupDataChannel(
-    dc: ReturnType<RTCPeerConnection["createDataChannel"]>,
-    remotePeerId: string,
-  ): void {
-    dc.onMessage.subscribe((data) => {
-      // werift delivers Buffer or string
-      const bytes =
-        data instanceof Buffer
-          ? new Uint8Array(data)
-          : typeof data === "string"
-            ? encoder.encode(data)
-            : new Uint8Array(data);
-
-      void this.handleDataChannelMessage(bytes, remotePeerId);
-    });
-  }
-
-  private async handleDataChannelMessage(
-    raw: Uint8Array,
-    remotePeerId: string,
+    b64Data: string,
   ): Promise<void> {
     if (!this.encKey) return;
+
+    let raw: Uint8Array;
+    try {
+      raw = base64ToUint8(b64Data);
+    } catch {
+      return; // Invalid base64 — discard
+    }
 
     const { type, fileId, frame } = decodeFrame(raw);
 
     // Validate nonce counter for replay protection
     const counter = extractCounter(frame.nonce);
-    if (!this.nonceCounter.validate(remotePeerId, counter)) {
+    if (!this.nonceCounter.validate(fromPeerId, counter)) {
       return; // Replay or out-of-order — discard
     }
 
@@ -557,14 +402,14 @@ export class WeriftTransport implements ITransport {
     switch (type) {
       case FRAME_TYPE_YJS_UPDATE:
         for (const cb of this.updateCallbacks) {
-          cb(fileId, plaintext, remotePeerId);
+          cb(fileId, plaintext, fromPeerId);
         }
         break;
 
       case FRAME_TYPE_AWARENESS: {
         const decoded = JSON.parse(decoder.decode(plaintext)) as AwarenessData;
         for (const cb of this.awarenessCallbacks) {
-          cb(remotePeerId, decoded);
+          cb(fromPeerId, decoded);
         }
         break;
       }
@@ -573,36 +418,16 @@ export class WeriftTransport implements ITransport {
 
   // ─── Helpers ────────────────────────────────────────────
 
-  private broadcastToDataChannels(data: Uint8Array): void {
-    const buf = Buffer.from(data);
-    for (const peer of this.peers.values()) {
-      if (peer.dc && peer.ready && peer.dc.readyState === "open") {
-        peer.dc.send(buf);
-      }
-    }
-  }
-
-  private sendSignal(to: string, data: RTCSignalData): void {
+  private sendRelay(to: string, data: Uint8Array): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    const msg: SignalingMessage = {
-      type: "signal",
+    const msg = JSON.stringify({
+      type: "relay",
       to,
       from: this.peerId,
-      data,
-    };
-    this.ws.send(JSON.stringify(msg));
-  }
-
-  private async closePeerConnection(
-    _peerId: string,
-    peer: PeerConnection,
-  ): Promise<void> {
-    peer.ready = false;
-    if (peer.dc) {
-      peer.dc.close();
-    }
-    await peer.pc.close();
+      data: uint8ToBase64(data),
+    });
+    this.ws.send(msg);
   }
 
   private setConnectionState(state: ConnectionState): void {

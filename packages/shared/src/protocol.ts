@@ -8,6 +8,7 @@ export type SignalingMessage =
   | SignalingPeerJoined
   | SignalingPeerLeft
   | SignalingSignal
+  | SignalingRelay
   | SignalingError;
 
 export interface SignalingJoin {
@@ -40,6 +41,13 @@ export interface SignalingSignal {
   to: string;
   from: string;
   data: RTCSignalData;
+}
+
+export interface SignalingRelay {
+  type: "relay";
+  to: string;
+  from: string;
+  data: string; // base64-encoded encrypted binary frame
 }
 
 export interface SignalingError {
