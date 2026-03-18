@@ -62,6 +62,7 @@ export type SignalingErrorCode =
   | "RATE_LIMITED"
   | "INVALID_MESSAGE"
   | "PEER_NOT_FOUND"
+  | "PEER_ID_TAKEN"
   | "INTERNAL_ERROR";
 
 // ─── WebRTC Signal Data ──────────────────────────────────────

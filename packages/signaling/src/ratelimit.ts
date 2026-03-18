@@ -82,7 +82,8 @@ export class RateLimiter {
     for (const store of [this.joins, this.messages]) {
       for (const [ip, bucket] of store) {
         bucket.timestamps = bucket.timestamps.filter((t) => t > windowStart);
-        if (bucket.timestamps.length === 0 && bucket.violations === 0) {
+        if (bucket.timestamps.length === 0) {
+          // Reset violations when no activity in the window — prevents permanent bans
           store.delete(ip);
         }
       }

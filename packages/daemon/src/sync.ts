@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import type {
   DaemonState,
   ITransport,
@@ -13,6 +13,18 @@ import { ManifestManager } from "./manifest.js";
 import { CRDTPersistence } from "./persistence.js";
 import { AwarenessManager } from "./awareness.js";
 import { GitDetector } from "./git.js";
+
+// ─── Path Validation ────────────────────────────────────────
+
+/**
+ * Validate that a resolved file path stays within the project root.
+ * Prevents path traversal attacks via malicious fileId (e.g. "../../.ssh/authorized_keys").
+ */
+function isWithinProject(projectRoot: string, filePath: string): boolean {
+  const resolved = resolve(projectRoot, filePath);
+  const normalizedRoot = resolve(projectRoot) + "/";
+  return resolved.startsWith(normalizedRoot);
+}
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -195,6 +207,10 @@ export class SyncOrchestrator extends EventEmitter {
 
   private handleLocalChange(path: string, content: string): void {
     if (this._state !== "syncing") return;
+    if (!isWithinProject(this.projectRoot, path)) {
+      this.emit("sync-error", path, new Error(`Path traversal blocked: ${path}`));
+      return;
+    }
 
     try {
       const hash = this.watcher.computeHash(content);
@@ -231,6 +247,10 @@ export class SyncOrchestrator extends EventEmitter {
 
   private handleLocalCreate(path: string, content: string): void {
     if (this._state !== "syncing") return;
+    if (!isWithinProject(this.projectRoot, path)) {
+      this.emit("sync-error", path, new Error(`Path traversal blocked: ${path}`));
+      return;
+    }
 
     try {
       const hash = this.watcher.computeHash(content);
@@ -275,6 +295,12 @@ export class SyncOrchestrator extends EventEmitter {
 
     if (this._state !== "syncing" && this._state !== "git_paused") return;
 
+    // Validate path stays within project root (prevents path traversal from remote peers)
+    if (!isWithinProject(this.projectRoot, fileId)) {
+      this.emit("sync-error", fileId, new Error(`Path traversal blocked: ${fileId}`));
+      return;
+    }
+
     try {
       const content = this.crdt.applyRemoteUpdate(fileId, update);
       const hash = this.watcher.computeHash(content);
@@ -282,9 +308,11 @@ export class SyncOrchestrator extends EventEmitter {
       // Register the write in the suppression registry
       this.watcher.writeRegistry.register(fileId, hash);
 
-      // Write to filesystem
+      // Write to filesystem — ensure parent directory exists
       const absPath = join(this.projectRoot, fileId);
-      void writeFile(absPath, content, "utf-8").then(() => {
+      void mkdir(dirname(absPath), { recursive: true }).then(() =>
+        writeFile(absPath, content, "utf-8"),
+      ).then(() => {
         this.totalOps++;
         this.opsInWindow++;
         this.emit("file-synced", fileId, "remote");

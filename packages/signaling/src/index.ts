@@ -212,10 +212,11 @@ const server = Bun.serve<PeerContext>({
 
     // WebSocket upgrade
     if (url.pathname === "/ws" || url.pathname === "/") {
-      const ip =
-        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        server.requestIP(req)?.address ??
-        "unknown";
+      const trustProxy = process.env["TRUST_PROXY"] === "true";
+      const forwardedIp = trustProxy
+        ? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        : undefined;
+      const ip = forwardedIp ?? server.requestIP(req)?.address ?? "unknown";
 
       const upgraded = server.upgrade(req, {
         data: {

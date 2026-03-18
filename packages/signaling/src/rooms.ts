@@ -56,6 +56,12 @@ export class RoomManager {
         return { ok: false, code: "AUTH_FAILED", message: "Invalid room secret" };
       }
 
+      // Reject if peerId is already taken by a different WebSocket
+      const existingWs = room.peers.get(peerId);
+      if (existingWs && existingWs !== ws) {
+        return { ok: false, code: "PEER_ID_TAKEN", message: "Peer ID is already in use in this room" };
+      }
+
       // Check peer limit
       if (room.peers.size >= MAX_PEERS_PER_ROOM) {
         return {

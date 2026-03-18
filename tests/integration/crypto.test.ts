@@ -32,6 +32,23 @@ describe("T6.5: Encryption & Nonce Replay Protection", () => {
       expect(keys1.authHash).not.toBe(keys2.authHash);
     });
 
+    test("same secret with different roomIds derives different encryption keys", async () => {
+      const secret = "shared-secret";
+      const keys1 = await deriveKeys(secret, "room-alpha");
+      const keys2 = await deriveKeys(secret, "room-beta");
+      // authHash is the same (derived from secret alone)
+      expect(keys1.authHash).toBe(keys2.authHash);
+      // But encryption keys differ due to different HKDF salt (SHA-256(roomId))
+      // Verify by encrypting the same plaintext — ciphertexts will differ even with same nonce
+      const pt = new TextEncoder().encode("test");
+      const aad = new Uint8Array(0);
+      const f1 = await encrypt(keys1.encKey, pt, "peer", 0n, aad);
+      const f2 = await encrypt(keys2.encKey, pt, "peer", 0n, aad);
+      expect(f1.ciphertext).not.toEqual(f2.ciphertext);
+      // Each key can only decrypt its own ciphertext
+      await expect(decrypt(keys2.encKey, f1, aad)).rejects.toThrow();
+    });
+
     test("authHash is 64-char hex (SHA-256)", async () => {
       const keys = await deriveKeys("any-secret");
       expect(keys.authHash).toHaveLength(64);

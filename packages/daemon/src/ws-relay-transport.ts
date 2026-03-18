@@ -194,8 +194,8 @@ export class WSRelayTransport implements ITransport {
     this.secret = secret;
     this.disposed = false;
 
-    // Derive encryption keys from shared secret
-    const keys = await deriveKeys(secret);
+    // Derive encryption keys from shared secret + roomId salt
+    const keys = await deriveKeys(secret, roomId);
     this.encKey = keys.encKey;
     this.authHash = keys.authHash;
 

@@ -18,10 +18,10 @@
       "@mflow/signaling": ["./packages/signaling/src"],
       "@mflow/signaling/*": ["./packages/signaling/src/*"],
       "@mflow/cli": ["./packages/cli/src"],
-      "@mflow/cli/*": ["./packages/cli/src/*"]
-    },
-    "@mflow/mcp": ["./packages/mcp/src"],
-    "@mflow/mcp/*": ["./packages/mcp/src/*"]
+      "@mflow/cli/*": ["./packages/cli/src/*"],
+      "@mflow/mcp": ["./packages/mcp/src"],
+      "@mflow/mcp/*": ["./packages/mcp/src/*"]
+    }
   },
   "references": [
     { "path": "packages/shared" },

@@ -18,7 +18,7 @@ type = "auto"
 [sync]
 signaling = "wss://signal.mflow.dev"
 room = ""
-secret = ""
+# secret: set via MFLOW_SECRET env var or 'mflow join' command
 debounce_ms = 50
 max_file_size_bytes = 1048576
 max_tracked_files = 5000
@@ -89,6 +89,20 @@ export async function initCommand(projectRoot: string): Promise<void> {
   }
 
   await writeFile(ignorePath, ignoreContent, "utf-8");
+
+  // Ensure .mflow/ is in .gitignore
+  const gitignorePath2 = join(projectRoot, ".gitignore");
+  try {
+    const gitignoreContent = await readFile(gitignorePath2, "utf-8");
+    if (!gitignoreContent.split("\n").some((line) => line.trim() === ".mflow/" || line.trim() === ".mflow")) {
+      await writeFile(gitignorePath2, gitignoreContent.trimEnd() + "\n\n# mflow local state\n.mflow/\n", "utf-8");
+      displayInfo("Added .mflow/ to .gitignore");
+    }
+  } catch {
+    // No .gitignore exists — create one with .mflow/
+    await writeFile(gitignorePath2, "# mflow local state\n.mflow/\n", "utf-8");
+    displayInfo("Created .gitignore with .mflow/");
+  }
 
   displaySuccess("Initialized mflow project");
   displayInfo(`Config: ${configPath}`);

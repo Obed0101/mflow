@@ -37,7 +37,7 @@ export async function peerIdPrefix(peerId: string): Promise<Uint8Array> {
  * - `authHash`: SHA-256 hex of the secret (sent to signaling for room auth).
  * - `encKey`: HKDF(secret, "mflow-enc", 256) imported as an AES-GCM CryptoKey.
  */
-export async function deriveKeys(secret: string): Promise<DerivedKeys> {
+export async function deriveKeys(secret: string, roomId?: string): Promise<DerivedKeys> {
   const authHash = await sha256(secret);
 
   // Import the raw secret as HKDF key material
@@ -49,12 +49,22 @@ export async function deriveKeys(secret: string): Promise<DerivedKeys> {
     ["deriveKey"],
   );
 
+  // Use SHA-256(roomId) as HKDF salt to ensure different rooms derive different keys.
+  // Falls back to empty salt for backward compatibility when roomId is not provided.
+  let salt: Uint8Array<ArrayBuffer>;
+  if (roomId) {
+    const saltDigest = await crypto.subtle.digest("SHA-256", encoder.encode(roomId));
+    salt = new Uint8Array(saltDigest) as Uint8Array<ArrayBuffer>;
+  } else {
+    salt = new Uint8Array(0) as Uint8Array<ArrayBuffer>;
+  }
+
   // Derive AES-256-GCM key via HKDF-SHA256
   const encKey = await crypto.subtle.deriveKey(
     {
       name: "HKDF",
       hash: "SHA-256",
-      salt: new Uint8Array(0), // no salt — secret is the sole entropy source
+      salt,
       info: encoder.encode(HKDF_ENC_INFO),
     },
     keyMaterial,
