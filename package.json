@@ -1,0 +1,25 @@
+{
+  "name": "mflow",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Real-time code sync layer for AI agent teams",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:signaling": "bun run --cwd packages/signaling src/index.ts",
+    "dev:daemon": "bun run --cwd packages/daemon src/index.ts",
+    "test": "bun test",
+    "test:integration": "bun test tests/integration/",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf packages/*/dist"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "license": "MIT"
+}

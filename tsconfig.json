@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "paths": {
+      "@mflow/shared": ["./packages/shared/src"],
+      "@mflow/shared/*": ["./packages/shared/src/*"],
+      "@mflow/daemon": ["./packages/daemon/src"],
+      "@mflow/daemon/*": ["./packages/daemon/src/*"],
+      "@mflow/signaling": ["./packages/signaling/src"],
+      "@mflow/signaling/*": ["./packages/signaling/src/*"],
+      "@mflow/cli": ["./packages/cli/src"],
+      "@mflow/cli/*": ["./packages/cli/src/*"]
+    }
+  },
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/daemon" },
+    { "path": "packages/signaling" },
+    { "path": "packages/cli" }
+  ],
+  "files": [],
+  "exclude": ["node_modules", "dist"]
+}
