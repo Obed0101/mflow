@@ -69,6 +69,7 @@ export async function startCommand(
   // Build args
   const args = ["run", daemonEntry, "--root", projectRoot, "--room", room, "--secret", secret];
   if (signaling) args.push("--signaling", signaling);
+  if (transport !== "relay") args.push("--transport", transport);
 
   // Use Bun to run the daemon entry point
   // The daemon module is @mflow/daemon — we launch it via a minimal entry script

@@ -395,35 +395,42 @@ export class WeriftTransport implements ITransport {
 
     const { pc } = peerConn;
 
-    switch (signal.type) {
-      case "offer":
-        await pc.setRemoteDescription({
-          type: "offer",
-          sdp: signal.sdp,
-        });
-        {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          this.sendSignal(fromPeerId, {
-            type: "answer",
-            sdp: answer.sdp,
+    try {
+      switch (signal.type) {
+        case "offer":
+          if (!signal.sdp) break;
+          await pc.setRemoteDescription({
+            type: "offer",
+            sdp: signal.sdp,
           });
-        }
-        break;
+          {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            this.sendSignal(fromPeerId, {
+              type: "answer",
+              sdp: answer.sdp,
+            });
+          }
+          break;
 
-      case "answer":
-        await pc.setRemoteDescription({
-          type: "answer",
-          sdp: signal.sdp,
-        });
-        break;
+        case "answer":
+          if (!signal.sdp) break;
+          await pc.setRemoteDescription({
+            type: "answer",
+            sdp: signal.sdp,
+          });
+          break;
 
-      case "candidate":
-        if (signal.candidate) {
-          // werift accepts the candidate object directly
-          await pc.addIceCandidate(signal.candidate as unknown as RTCIceCandidate);
-        }
-        break;
+        case "candidate":
+          if (signal.candidate) {
+            // werift accepts RTCIceCandidateInit objects directly
+            await pc.addIceCandidate(signal.candidate as unknown as RTCIceCandidate);
+          }
+          break;
+      }
+    } catch {
+      // Silently ignore WebRTC errors (malformed SDP, invalid candidates, state errors).
+      // The connection will retry or fall through to reconnect logic.
     }
   }
 
@@ -461,12 +468,17 @@ export class WeriftTransport implements ITransport {
 
     // Handle ICE candidates
     pc.onIceCandidate.subscribe((candidate) => {
+      // werift fires undefined at end-of-candidates — skip it
+      if (!candidate) return;
+
       // werift ICE candidates are already plain objects with candidate/sdpMid/sdpMLineIndex
       const c = candidate as unknown as { candidate: string; sdpMid: string | null; sdpMLineIndex: number | null };
+      if (!c.candidate) return;
+
       this.sendSignal(peerInfo.peerId, {
         type: "candidate",
         candidate: {
-          candidate: c.candidate ?? String(candidate),
+          candidate: c.candidate,
           sdpMid: c.sdpMid ?? null,
           sdpMLineIndex: c.sdpMLineIndex ?? null,
         },
