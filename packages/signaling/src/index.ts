@@ -14,6 +14,7 @@ import { RoomManager, type PeerContext } from "./rooms.js";
 import { RateLimiter } from "./ratelimit.js";
 import { relaySignal, relayData } from "./relay.js";
 import { getDashboardHtml } from "./dashboard-html.js";
+import { getLandingHtml } from "./landing-html.js";
 
 // ─── State ──────────────────────────────────────────────────
 
@@ -335,6 +336,16 @@ const server = Bun.serve<PeerContext>({
         uptime,
         memoryMB,
       });
+    }
+
+    // Landing page
+    if (url.pathname === "/" && req.method === "GET") {
+      // Only serve landing if NOT a WebSocket upgrade request
+      if (!req.headers.get("upgrade")) {
+        return new Response(getLandingHtml(), {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
     }
 
     // WebSocket upgrade
