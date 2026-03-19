@@ -71,6 +71,14 @@ export const KNOWN_BINARY_EXTENSIONS = new Set([
   ".sqlite", ".db",
 ]);
 
+// ─── Signaling Hardening ─────────────────────────────────────
+
+export const WS_MAX_PAYLOAD_BYTES = 65_536;
+export const UNAUTHENTICATED_TIMEOUT_MS = 10_000;
+export const MAX_UNAUTHENTICATED_PER_IP = 5;
+export const MAX_UNAUTHENTICATED_GLOBAL = 500;
+export const RELAY_DATA_MAX_LENGTH = 65_536;
+
 // ─── Crypto ──────────────────────────────────────────────────
 
 export const HKDF_ENC_INFO = "mflow-enc";

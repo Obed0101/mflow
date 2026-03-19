@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type {
   DaemonState,
@@ -7,12 +7,24 @@ import type {
   ManifestEntry,
   MflowConfig,
 } from "@mflow/shared";
+import {
+  MAX_FILE_SIZE_BYTES,
+  MAX_TRACKED_FILES,
+} from "@mflow/shared";
+import { shouldSync, createDefaultFilter, type IgnoreFilter } from "@mflow/shared";
 import { CRDTManager } from "./crdt.js";
 import { FileWatcher } from "./watcher.js";
 import { ManifestManager } from "./manifest.js";
 import { CRDTPersistence } from "./persistence.js";
 import { AwarenessManager } from "./awareness.js";
 import { GitDetector } from "./git.js";
+
+// ─── Pause Buffer Limits ──────────────────────────────────
+const MAX_BUFFERED_UPDATES = 1_000;
+const MAX_BUFFERED_BYTES = 50 * 1024 * 1024; // 50MB
+
+// ─── Internal Path Blocklist ──────────────────────────────
+const BLOCKED_PATH_PREFIXES = [".git/", ".mflow/", ".agents/"];
 
 // ─── Path Validation ────────────────────────────────────────
 
@@ -24,6 +36,35 @@ function isWithinProject(projectRoot: string, filePath: string): boolean {
   const resolved = resolve(projectRoot, filePath);
   const normalizedRoot = resolve(projectRoot) + "/";
   return resolved.startsWith(normalizedRoot);
+}
+
+/**
+ * Validate that the final filesystem target (after symlink resolution) stays
+ * within the project root. Prevents symlink escape attacks where a symlinked
+ * directory inside the repo points outside it.
+ */
+async function isWithinProjectReal(projectRoot: string, absPath: string): Promise<boolean> {
+  try {
+    const realRoot = await realpath(projectRoot);
+    // Resolve as far as possible — for new files, resolve the parent directory
+    let realTarget: string;
+    try {
+      realTarget = await realpath(absPath);
+    } catch {
+      // File doesn't exist yet — resolve the parent directory instead
+      const parentDir = dirname(absPath);
+      try {
+        const realParent = await realpath(parentDir);
+        realTarget = join(realParent, absPath.slice(parentDir.length + 1));
+      } catch {
+        // Parent doesn't exist either — will be created by mkdir, check textual path
+        return absPath.startsWith(realRoot + "/");
+      }
+    }
+    return realTarget.startsWith(realRoot + "/");
+  } catch {
+    return false;
+  }
 }
 
 // ─── Types ──────────────────────────────────────────────────
@@ -83,6 +124,10 @@ export class SyncOrchestrator extends EventEmitter {
 
   // Pause state
   private bufferedUpdates: Array<{ path: string; update: Uint8Array }> = [];
+  private bufferedBytes = 0;
+
+  // Remote write validation
+  private readonly ignoreFilter: IgnoreFilter;
 
   constructor(options: SyncOrchestratorOptions) {
     super();
@@ -96,11 +141,10 @@ export class SyncOrchestrator extends EventEmitter {
     this.manifest = new ManifestManager();
     this.git = new GitDetector(options.projectRoot);
 
-    // Watcher needs an IgnoreFilter — created during start()
-    // For now, create with empty filter; start() will configure it
-    const { createDefaultFilter } = require("@mflow/shared") as typeof import("@mflow/shared");
+    // Watcher needs an IgnoreFilter — also used for remote write validation
     const filter = createDefaultFilter();
     filter.addPatterns(options.config.sync.ignore.patterns);
+    this.ignoreFilter = filter;
 
     this.watcher = new FileWatcher({
       projectRoot: options.projectRoot,
@@ -280,7 +324,7 @@ export class SyncOrchestrator extends EventEmitter {
 
   // ─── Remote Change Handlers ─────────────────────────────
 
-  private handleRemoteUpdate(fileId: string, update: Uint8Array): void {
+  private async handleRemoteUpdate(fileId: string, update: Uint8Array): Promise<void> {
     // Handle manifest updates separately
     if (fileId === "__manifest__") {
       this.manifest.applyRemoteUpdate(update);
@@ -288,8 +332,18 @@ export class SyncOrchestrator extends EventEmitter {
     }
 
     if (this._state === "paused") {
-      // Buffer updates while paused
+      // FIX 5: Bounded pause buffer — drop oldest when limits exceeded
+      if (
+        this.bufferedUpdates.length >= MAX_BUFFERED_UPDATES ||
+        this.bufferedBytes + update.byteLength > MAX_BUFFERED_BYTES
+      ) {
+        const dropped = this.bufferedUpdates.shift();
+        if (dropped) {
+          this.bufferedBytes -= dropped.update.byteLength;
+        }
+      }
       this.bufferedUpdates.push({ path: fileId, update });
+      this.bufferedBytes += update.byteLength;
       return;
     }
 
@@ -301,8 +355,31 @@ export class SyncOrchestrator extends EventEmitter {
       return;
     }
 
+    // FIX 4: Reject writes to internal/blocked paths
+    for (const prefix of BLOCKED_PATH_PREFIXES) {
+      if (fileId.startsWith(prefix) || fileId === prefix.slice(0, -1)) {
+        this.emit("sync-error", fileId, new Error(`Blocked internal path: ${fileId}`));
+        return;
+      }
+    }
+
     try {
       const content = this.crdt.applyRemoteUpdate(fileId, update);
+
+      // FIX 4: Enforce ignore rules and size limits on remote writes
+      const contentSize = Buffer.byteLength(content, "utf-8");
+      const syncResult = shouldSync(fileId, contentSize, undefined, this.ignoreFilter);
+      if (!syncResult.sync) {
+        this.emit("sync-error", fileId, new Error(`Remote write rejected (${syncResult.reason}): ${fileId}`));
+        return;
+      }
+
+      // FIX 4: Enforce max tracked files
+      if (this.manifest.fileCount >= MAX_TRACKED_FILES && !this.manifest.hasFile(fileId)) {
+        this.emit("sync-error", fileId, new Error(`Max tracked files (${MAX_TRACKED_FILES}) exceeded`));
+        return;
+      }
+
       const hash = this.watcher.computeHash(content);
 
       // Register the write in the suppression registry
@@ -310,13 +387,28 @@ export class SyncOrchestrator extends EventEmitter {
 
       // Write to filesystem — ensure parent directory exists
       const absPath = join(this.projectRoot, fileId);
-      void mkdir(dirname(absPath), { recursive: true }).then(() =>
-        writeFile(absPath, content, "utf-8"),
-      ).then(() => {
-        this.totalOps++;
-        this.opsInWindow++;
-        this.emit("file-synced", fileId, "remote");
+
+      // FIX 1: Symlink escape prevention — verify real path after mkdir
+      await mkdir(dirname(absPath), { recursive: true });
+
+      if (!(await isWithinProjectReal(this.projectRoot, absPath))) {
+        this.emit("sync-error", fileId, new Error(`Symlink escape blocked: ${fileId}`));
+        return;
+      }
+
+      await writeFile(absPath, content, "utf-8");
+
+      // Update manifest
+      this.manifest.setFile(fileId, {
+        exists: true,
+        contentHash: hash,
+        mtime: Date.now(),
+        size: contentSize,
       });
+
+      this.totalOps++;
+      this.opsInWindow++;
+      this.emit("file-synced", fileId, "remote");
     } catch (err) {
       this.emit(
         "sync-error",
@@ -390,9 +482,10 @@ export class SyncOrchestrator extends EventEmitter {
 
     // Apply buffered updates
     for (const { path, update } of this.bufferedUpdates) {
-      this.handleRemoteUpdate(path, update);
+      void this.handleRemoteUpdate(path, update);
     }
     this.bufferedUpdates = [];
+    this.bufferedBytes = 0;
   }
 
   /**

@@ -51,9 +51,9 @@ export class RoomManager {
     let room = this.rooms.get(roomId);
 
     if (room) {
-      // Verify secret hash
+      // Verify secret hash — generic message to avoid leaking room existence
       if (room.secretHash !== secretHash) {
-        return { ok: false, code: "AUTH_FAILED", message: "Invalid room secret" };
+        return { ok: false, code: "AUTH_FAILED", message: "Unable to join room" };
       }
 
       // Reject if peerId is already taken by a different WebSocket

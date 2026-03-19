@@ -32,6 +32,9 @@ const RATE_LIMIT_MESSAGES_PER_MINUTE = 100;
 const RATE_LIMIT_MAX_VIOLATIONS = 3;
 const MAX_MESSAGE_SIZE = 65_536; // 64KB
 const MAX_STRING_LENGTH = 256;
+const UNAUTHENTICATED_TIMEOUT_MS = 10_000;
+const MAX_UNAUTHENTICATED_PER_IP = 5;
+const MAX_UNAUTHENTICATED_GLOBAL = 500;
 
 // ─── Room Manager ───────────────────────────────────────────
 
@@ -52,8 +55,17 @@ function joinRoom(
     rooms.set(roomId, room);
   }
 
+  // Generic message to avoid leaking room existence
   if (room.secretHash !== secretHash) {
-    return { ok: false, code: "AUTH_FAILED", message: "Invalid room secret" };
+    return { ok: false, code: "AUTH_FAILED", message: "Unable to join room" };
+  }
+
+  // Reject duplicate peerId from a different socket
+  if (room.peers.has(peerId)) {
+    const existing = room.peers.get(peerId)!;
+    if (existing.ws !== ws && existing.ws.readyState === WebSocket.OPEN) {
+      return { ok: false, code: "PEER_ID_TAKEN", message: "Peer ID already in use in this room" };
+    }
   }
 
   if (room.peers.size >= MAX_PEERS_PER_ROOM) {
@@ -189,6 +201,40 @@ const startTime = Date.now();
 const wsToIp = new Map<WebSocket, string>();
 const wsToPeerId = new Map<WebSocket, string>();
 
+// ─── Unauthenticated Connection Tracking ────────────────────
+
+const unauthSockets = new Set<WebSocket>();
+const unauthPerIp = new Map<string, number>();
+
+function trackUnauthSocket(ws: WebSocket, ip: string): boolean {
+  if (unauthSockets.size >= MAX_UNAUTHENTICATED_GLOBAL) return false;
+  const current = unauthPerIp.get(ip) ?? 0;
+  if (current >= MAX_UNAUTHENTICATED_PER_IP) return false;
+
+  unauthSockets.add(ws);
+  unauthPerIp.set(ip, current + 1);
+
+  setTimeout(() => {
+    if (unauthSockets.has(ws)) {
+      ws.close(1008, "Authentication timeout");
+    }
+  }, UNAUTHENTICATED_TIMEOUT_MS);
+
+  return true;
+}
+
+function removeFromUnauth(ws: WebSocket): void {
+  if (unauthSockets.delete(ws)) {
+    const ip = wsToIp.get(ws) ?? "unknown";
+    const count = unauthPerIp.get(ip) ?? 1;
+    if (count <= 1) {
+      unauthPerIp.delete(ip);
+    } else {
+      unauthPerIp.set(ip, count - 1);
+    }
+  }
+}
+
 function sendError(ws: WebSocket, code: string, message: string): void {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: "error", code, message }));
@@ -265,6 +311,7 @@ function handleMessage(ws: WebSocket, raw: string): void {
       }
 
       wsToPeerId.set(ws, peerId);
+      removeFromUnauth(ws);
 
       // Send joined to the new peer
       ws.send(JSON.stringify({ type: "joined", roomId, peers: result.peers }));
@@ -372,11 +419,18 @@ Deno.serve({ port: PORT }, (req, info) => {
 
     wsToIp.set(socket, ip);
 
+    socket.onopen = () => {
+      if (!trackUnauthSocket(socket, ip)) {
+        socket.close(1008, "Too many unauthenticated connections");
+      }
+    };
+
     socket.onmessage = (event) => {
       handleMessage(socket, typeof event.data === "string" ? event.data : String(event.data));
     };
 
     socket.onclose = () => {
+      removeFromUnauth(socket);
       const result = leaveRoom(socket);
       if (result) {
         const msg = JSON.stringify({ type: "peer-left", peerId: result.peerId });

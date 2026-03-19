@@ -12,12 +12,15 @@ import {
   encrypt,
   decrypt,
   NonceCounter,
+  peerIdPrefix,
 } from "@mflow/shared";
 import {
   NONCE_TOTAL_BYTES,
   NONCE_PEER_PREFIX_BYTES,
   RECONNECT_MAX_DELAY_MS,
 } from "@mflow/shared";
+
+const MIN_FRAME_SIZE = 15; // 1 type + 2 fileIdLen + 12 nonce minimum
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -90,9 +93,15 @@ function decodeFrame(data: Uint8Array): {
   const fileIdLen = (data[offset] << 8) | data[offset + 1];
   offset += 2;
 
+  // FIX 3: Validate fileIdLen bounds before slicing
+  if (offset + fileIdLen > data.length) throw new Error("truncated frame: fileId");
+
   // FileId bytes
   const fileId = decoder.decode(data.subarray(offset, offset + fileIdLen));
   offset += fileIdLen;
+
+  // FIX 3: Validate nonce fits
+  if (offset + NONCE_TOTAL_BYTES > data.length) throw new Error("truncated frame: nonce");
 
   // Nonce (12 bytes)
   const nonce = data.slice(offset, offset + NONCE_TOTAL_BYTES);
@@ -222,7 +231,8 @@ export class WSRelayTransport implements ITransport {
   sendUpdate(fileId: string, update: Uint8Array): void {
     if (!this.encKey) return;
 
-    const aad = encoder.encode(`${this.roomId}:${fileId}`);
+    // AAD includes sender peerId for sender binding
+    const aad = encoder.encode(`${this.roomId}:${fileId}:${this.peerId}`);
     const counter = this.nonceCounter.increment(this.peerId);
 
     void encrypt(this.encKey, update, this.peerId, counter, aad).then(
@@ -243,7 +253,8 @@ export class WSRelayTransport implements ITransport {
     if (!this.encKey) return;
 
     const serialized = encoder.encode(JSON.stringify(data));
-    const aad = encoder.encode(`${this.roomId}:`);
+    // AAD includes sender peerId for sender binding
+    const aad = encoder.encode(`${this.roomId}::${this.peerId}`);
     const counter = this.nonceCounter.increment(this.peerId);
 
     void encrypt(this.encKey, serialized, this.peerId, counter, aad).then(
@@ -374,45 +385,65 @@ export class WSRelayTransport implements ITransport {
   ): Promise<void> {
     if (!this.encKey) return;
 
-    let raw: Uint8Array;
     try {
-      raw = base64ToUint8(b64Data);
-    } catch {
-      return; // Invalid base64 — discard
-    }
-
-    const { type, fileId, frame } = decodeFrame(raw);
-
-    // Validate nonce counter for replay protection
-    const counter = extractCounter(frame.nonce);
-    if (!this.nonceCounter.validate(fromPeerId, counter)) {
-      return; // Replay or out-of-order — discard
-    }
-
-    // Build AAD: roomId + ":" + fileId
-    const aad = encoder.encode(`${this.roomId}:${fileId}`);
-
-    let plaintext: Uint8Array;
-    try {
-      plaintext = await decrypt(this.encKey, frame, aad);
-    } catch {
-      return; // Decryption failed — tampered or wrong key
-    }
-
-    switch (type) {
-      case FRAME_TYPE_YJS_UPDATE:
-        for (const cb of this.updateCallbacks) {
-          cb(fileId, plaintext, fromPeerId);
-        }
-        break;
-
-      case FRAME_TYPE_AWARENESS: {
-        const decoded = JSON.parse(decoder.decode(plaintext)) as AwarenessData;
-        for (const cb of this.awarenessCallbacks) {
-          cb(fromPeerId, decoded);
-        }
-        break;
+      let raw: Uint8Array;
+      try {
+        raw = base64ToUint8(b64Data);
+      } catch {
+        return; // Invalid base64 — discard
       }
+
+      // FIX 3: Validate minimum frame size before decoding
+      if (raw.length < MIN_FRAME_SIZE) return;
+
+      const { type, fileId, frame } = decodeFrame(raw);
+
+      // FIX 2: Verify nonce prefix matches claimed sender
+      const expectedPrefix = await peerIdPrefix(fromPeerId);
+      const actualPrefix = frame.nonce.slice(0, NONCE_PEER_PREFIX_BYTES);
+      if (!expectedPrefix.every((b, i) => b === actualPrefix[i])) {
+        return; // Nonce prefix mismatch — possible forgery
+      }
+
+      // Validate nonce counter for replay protection
+      const counter = extractCounter(frame.nonce);
+      if (!this.nonceCounter.validate(fromPeerId, counter)) {
+        return; // Replay or out-of-order — discard
+      }
+
+      // FIX 2: Include fromPeerId in AAD for sender binding
+      const aad = encoder.encode(`${this.roomId}:${fileId}:${fromPeerId}`);
+
+      let plaintext: Uint8Array;
+      try {
+        plaintext = await decrypt(this.encKey, frame, aad);
+      } catch {
+        return; // Decryption failed — tampered or wrong key
+      }
+
+      switch (type) {
+        case FRAME_TYPE_YJS_UPDATE:
+          for (const cb of this.updateCallbacks) {
+            cb(fileId, plaintext, fromPeerId);
+          }
+          break;
+
+        case FRAME_TYPE_AWARENESS: {
+          let decoded: AwarenessData;
+          try {
+            decoded = JSON.parse(decoder.decode(plaintext)) as AwarenessData;
+          } catch {
+            return; // Malformed awareness JSON — discard
+          }
+          for (const cb of this.awarenessCallbacks) {
+            cb(fromPeerId, decoded);
+          }
+          break;
+        }
+      }
+    } catch {
+      // FIX 3: Catch-all for malformed frames — never crash the daemon
+      return;
     }
   }
 
