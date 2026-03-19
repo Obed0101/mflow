@@ -16,18 +16,33 @@ Mflow syncs file changes in real-time between AI coding agents (Claude Code, Cur
 
 Think of it as **Google Docs for code repos** -- P2P, git-aware, and designed for multi-agent workflows.
 
-### The Problem
+### The Magic
 
-Developers running 3-6+ AI agents in parallel hit the same wall: each agent works in its own worktree or branch, completely blind to the others. When they finish, merge conflicts are inevitable.
+Agent A creates `hello.ts` in its folder. In less than 1 second, `hello.ts` appears in Agent B's folder. Identical. No git, no commit, no merge, no nothing.
 
-Mflow eliminates this by syncing file changes **before git commit** -- every participant sees every change as it happens.
+5 agents in a swarm see each other's changes **while they work**, not after. Like editing the same Google Doc, but with local files in separate folders.
+
+### Without mflow (current workflow)
+
+```
+Agent A edits in worktree-a  ->  git add  ->  git commit  ->  git push
+Agent B                      ->  git pull  ->  MERGE CONFLICT  ->  resolve  ->  retry
+Time: minutes. Conflicts: frequent. Agents: blind to each other.
+```
+
+### With mflow
+
+```
+Agent A edits in folder-a  ->  appears in folder-b automatically
+Time: <1 second. Conflicts: prevented by propagation gate. Agents: see everything live.
+```
 
 ### What Mflow Is NOT
 
 - Not a git replacement -- git remains the source of truth for version history
 - Not a cloud IDE -- your code stays on your machine
-- Not a merge tool -- it prevents conflicts instead of resolving them
-- Not a CI/CD tool -- it's a live collaboration layer
+- Not a merge tool -- it **prevents** conflicts instead of resolving them
+- Not a CI/CD tool -- it's a live collaboration layer that sits between "editing" and "committing"
 
 ---
 
@@ -456,14 +471,36 @@ When two agents edit the **same file** simultaneously, CRDTs guarantee both peer
 
 ### Layer 1: Propagation Gate (automatic, zero-config)
 
-When the daemon detects another peer recently edited the same file (via received updates or awareness), it **queues** local changes instead of propagating them. When the other peer finishes (10s of no activity), the queued changes propagate -- resulting in a clean sequential merge instead of a concurrent one.
+The propagation gate is the core innovation. It converts dangerous **concurrent** merges into safe **sequential** merges -- automatically, invisibly, with zero configuration.
+
+**How it works:**
+
+Every mflow daemon tracks two signals per file:
+1. **Recent remote edits** -- "Did another peer send me an update for this file in the last 10 seconds?"
+2. **Awareness** -- "Is another peer currently editing this file?" (broadcast every 5s)
+
+If either signal is active when you make a local change, your update is **queued** instead of propagated. It sits in a local buffer until the other peer finishes. Then it propagates -- and because it's now sequential (not concurrent), Y.js merges it cleanly.
 
 ```
-Agent A edits server.ts     → propagates immediately (no contention)
-Agent B edits server.ts     → QUEUED (gate detects A is editing)
-Agent A finishes             → 10s pass, gate clears
-Agent B's edit propagates   → clean sequential merge, no garbling
+Without gate (dangerous):
+  Agent A edits server.ts  ──→  CRDT merge  ←──  Agent B edits server.ts
+  Result: interleaved garbage (both edits mixed character-by-character)
+
+With gate (safe):
+  Agent A edits server.ts  ──→  propagates immediately
+  Agent B edits server.ts  ──→  QUEUED (gate active: A edited recently)
+  Agent A finishes          ──→  10s pass, gate clears
+  Agent B's edit propagates ──→  applied ON TOP of A's version (sequential)
+  Result: clean merge (B's edit computed against A's final state)
 ```
+
+**Why this works:** Y.js CRDTs produce garbage when two peers insert text at nearby positions simultaneously (character-level interleaving). But when edits are applied sequentially -- A's version lands first, then B's diff is computed against A's result -- the merge is clean. The gate forces this sequencing automatically.
+
+**What happens to queued updates:**
+- They are stored as raw Y.js updates in memory (not file snapshots)
+- The gate checks every 2 seconds if it can drain the queue
+- If the queue fills up (1000 items or 50MB), it force-drains -- data integrity is more important than collision prevention
+- No data is ever lost or silently dropped
 
 This happens automatically. No agent changes needed. Covers ~85% of collision scenarios.
 
