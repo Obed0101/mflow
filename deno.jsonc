@@ -1,0 +1,6 @@
+{
+  "deploy": {
+    "org": "obed0101",
+    "app": "mflow-signal"
+  }
+}
