@@ -144,4 +144,20 @@ export const IPCRequestSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ignore"), pattern: z.string().min(1) }),
   z.object({ type: z.literal("peers") }),
   z.object({ type: z.literal("health") }),
+  z.object({
+    type: z.literal("lock"),
+    path: z.string().min(1).max(1024),
+    leaseDurationMs: z.number().int().positive().max(120_000).optional(),
+    source: PauseSourceSchema.optional(),
+  }),
+  z.object({
+    type: z.literal("unlock"),
+    path: z.string().min(1).max(1024),
+    source: PauseSourceSchema.optional(),
+    force: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal("lock-query"),
+    path: z.string().min(1).max(1024).optional(),
+  }),
 ]);

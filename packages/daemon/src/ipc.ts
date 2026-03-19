@@ -7,7 +7,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import { unlink, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { existsSync } from "node:fs";
-import type { IPCRequest, IPCResponse, PauseSource } from "@mflow/shared";
+import type { IPCRequest, IPCResponse, PauseSource, FileLock, LockResponse } from "@mflow/shared";
 import { IPCRequestSchema } from "@mflow/shared";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -24,6 +24,9 @@ export interface IPCHandler {
   handleIgnore(pattern: string): Promise<IPCResponse>;
   handlePeers(): Promise<IPCResponse>;
   handleHealth(): Promise<IPCResponse>;
+  handleLock(path: string, leaseDurationMs?: number, source?: PauseSource): Promise<IPCResponse>;
+  handleUnlock(path: string, source?: PauseSource, force?: boolean): Promise<IPCResponse>;
+  handleLockQuery(path?: string): Promise<IPCResponse>;
 }
 
 // ─── IPCServer ──────────────────────────────────────────────
@@ -198,6 +201,12 @@ export class IPCServer {
         return handler.handlePeers();
       case "health":
         return handler.handleHealth();
+      case "lock":
+        return handler.handleLock(request.path, request.leaseDurationMs, request.source);
+      case "unlock":
+        return handler.handleUnlock(request.path, request.source, request.force);
+      case "lock-query":
+        return handler.handleLockQuery(request.path);
     }
   }
 

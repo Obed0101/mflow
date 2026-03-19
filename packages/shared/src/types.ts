@@ -41,6 +41,32 @@ export interface PauseReason {
   timestamp: number;
 }
 
+// ─── File Locking ───────────────────────────────────────────
+
+export interface FileLock {
+  path: string;           // relative file path
+  holderId: string;       // peerId of lock holder
+  holderName: string;     // human-readable name
+  token: number;          // monotonic fencing token
+  acquiredAt: number;     // timestamp ms
+  expiresAt: number;      // timestamp ms
+  leaseDurationMs: number;
+}
+
+export interface LockResponse {
+  granted: boolean;
+  lock: FileLock;
+}
+
+export type MergeWarningType = "duplicate-import" | "unbalanced-braces";
+
+export interface MergeWarning {
+  path: string;
+  type: MergeWarningType;
+  detail: string;
+  timestamp: number;
+}
+
 // ─── Daemon ──────────────────────────────────────────────────
 
 export type DaemonState =
@@ -62,6 +88,8 @@ export interface DaemonStatus {
   uptime: number;
   memoryUsageMB: number;
   pauseReasons: PauseReason[];
+  locks: FileLock[];
+  mergeWarnings: MergeWarning[];
 }
 
 // ─── Manifest ────────────────────────────────────────────────
@@ -111,11 +139,16 @@ export type IPCRequest =
   | { type: "stop" }
   | { type: "ignore"; pattern: string }
   | { type: "peers" }
-  | { type: "health" };
+  | { type: "health" }
+  | { type: "lock"; path: string; leaseDurationMs?: number; source?: PauseSource }
+  | { type: "unlock"; path: string; source?: PauseSource; force?: boolean }
+  | { type: "lock-query"; path?: string };
 
 export type IPCResponse =
   | { type: "status"; data: DaemonStatus }
   | { type: "peers"; data: PeerInfo[] }
+  | { type: "lock-result"; data: LockResponse }
+  | { type: "locks"; data: FileLock[] }
   | { type: "ok" }
   | { type: "error"; message: string };
 

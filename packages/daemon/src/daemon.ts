@@ -6,7 +6,9 @@ import { hostname } from "node:os";
 import type {
   DaemonState,
   DaemonStatus,
+  FileLock,
   ITransport,
+  LockResponse,
   MflowConfig,
   PauseSource,
   PeerInfo,
@@ -21,6 +23,7 @@ import {
   sha256,
 } from "@mflow/shared";
 import { SyncOrchestrator, type SyncStats } from "./sync.js";
+import { FileLockManager } from "./file-lock-manager.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -70,6 +73,7 @@ export interface DaemonEvents {
  */
 export class MflowDaemon extends EventEmitter {
   private sync: SyncOrchestrator | null = null;
+  private readonly lockManager = new FileLockManager();
   private readonly transport: ITransport;
   private config: MflowConfig;
   private readonly peerId: string;
@@ -188,6 +192,9 @@ export class MflowDaemon extends EventEmitter {
     // Register shutdown handlers
     this.registerSignalHandlers();
 
+    // Start lock expiry timer
+    this.lockManager.startExpiryCheck();
+
     this.startTime = Date.now();
     this.emit("started");
   }
@@ -208,6 +215,9 @@ export class MflowDaemon extends EventEmitter {
         await this.sync.stop();
         this.sync = null;
       }
+
+      // Stop lock manager
+      this.lockManager.dispose();
 
       // Disconnect transport
       await this.transport.disconnect();
@@ -245,6 +255,33 @@ export class MflowDaemon extends EventEmitter {
     this.sync?.removePause(source, id, force);
   }
 
+  // ─── File Locking ──────────────────────────────────────────
+
+  /**
+   * Acquire a file lock. Returns grant/deny response.
+   */
+  acquireLock(path: string, leaseDurationMs?: number): LockResponse {
+    return this.lockManager.acquire(path, this.peerId, this.peerName, leaseDurationMs);
+  }
+
+  /**
+   * Release a file lock. Only the holder can release unless force=true.
+   */
+  releaseLock(path: string, force = false): boolean {
+    return this.lockManager.release(path, this.peerId, force);
+  }
+
+  /**
+   * Query locks — all active locks or a specific file's lock.
+   */
+  queryLocks(path?: string): FileLock[] {
+    if (path) {
+      const lock = this.lockManager.getLock(path);
+      return lock ? [lock] : [];
+    }
+    return this.lockManager.getAll();
+  }
+
   // ─── Status ──────────────────────────────────────────────
 
   /**
@@ -262,6 +299,8 @@ export class MflowDaemon extends EventEmitter {
       uptime: this.startTime > 0 ? Date.now() - this.startTime : 0,
       memoryUsageMB: Math.round(process.memoryUsage.rss() / 1_048_576),
       pauseReasons: this.sync?.getActivePauseReasons() ?? [],
+      locks: this.lockManager.getAll(),
+      mergeWarnings: [],
     };
   }
 

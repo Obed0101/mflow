@@ -3,13 +3,18 @@ import { mkdir, realpath, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type {
   DaemonState,
+  FileLock,
   ITransport,
   ManifestEntry,
+  MergeWarning,
+  MergeWarningType,
   MflowConfig,
   PauseReason,
   PauseSource,
 } from "@mflow/shared";
 import {
+  GATE_WINDOW_MS,
+  GATE_DRAIN_INTERVAL_MS,
   MAX_FILE_SIZE_BYTES,
   MAX_TRACKED_FILES,
 } from "@mflow/shared";
@@ -20,6 +25,7 @@ import { ManifestManager } from "./manifest.js";
 import { CRDTPersistence } from "./persistence.js";
 import { AwarenessManager } from "./awareness.js";
 import { GitDetector } from "./git.js";
+import { FileLockManager } from "./file-lock-manager.js";
 
 // ─── Pause Buffer Limits ──────────────────────────────────
 const MAX_BUFFERED_UPDATES = 1_000;
@@ -76,6 +82,8 @@ export interface SyncOrchestratorEvents {
   "file-synced": (path: string, direction: "local" | "remote") => void;
   "sync-error": (path: string, error: Error) => void;
   "stats-update": (stats: SyncStats) => void;
+  "merge-warning": (warning: MergeWarning) => void;
+  "gate-overflow": (path: string) => void;
 }
 
 export interface SyncStats {
@@ -108,6 +116,7 @@ export class SyncOrchestrator extends EventEmitter {
   private _state: DaemonState = "starting";
   private readonly projectRoot: string;
   private readonly config: MflowConfig;
+  private readonly peerId: string;
 
   // Components
   readonly crdt: CRDTManager;
@@ -116,6 +125,7 @@ export class SyncOrchestrator extends EventEmitter {
   readonly persistence: CRDTPersistence;
   readonly awareness: AwarenessManager;
   readonly git: GitDetector;
+  readonly locks: FileLockManager;
   private readonly transport: ITransport;
 
   // Stats
@@ -129,6 +139,15 @@ export class SyncOrchestrator extends EventEmitter {
   private bufferedUpdates: Array<{ path: string; update: Uint8Array }> = [];
   private bufferedBytes = 0;
 
+  // Propagation gate (Layer 1) — tracks remote edit recency per file
+  private readonly recentRemoteEdits = new Map<string, { peerId: string; timestamp: number }>();
+  private readonly gateQueue = new Map<string, Array<{ update: Uint8Array; timestamp: number }>>();
+  private gateQueueBytes = 0;
+  private gateDrainTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Syntax guard (Layer 3) — active merge warnings
+  private readonly mergeWarnings = new Map<string, MergeWarning>();
+
   // Remote write validation
   private readonly ignoreFilter: IgnoreFilter;
 
@@ -137,12 +156,14 @@ export class SyncOrchestrator extends EventEmitter {
     this.projectRoot = options.projectRoot;
     this.config = options.config;
     this.transport = options.transport;
+    this.peerId = options.peerId;
 
     // Initialize components
     this.crdt = new CRDTManager(options.config.sync.unload_after_minutes);
     this.persistence = new CRDTPersistence(options.projectRoot);
     this.manifest = new ManifestManager();
     this.git = new GitDetector(options.projectRoot);
+    this.locks = new FileLockManager();
 
     // Watcher needs an IgnoreFilter — also used for remote write validation
     const filter = createDefaultFilter();
@@ -220,17 +241,44 @@ export class SyncOrchestrator extends EventEmitter {
     // ── Remote change flow: Transport → CRDT → Filesystem ──
 
     this.transport.onUpdate((fileId, update, peerId) => {
+      // Track remote edit recency for propagation gate (Layer 1)
+      if (fileId !== "__manifest__") {
+        this.recentRemoteEdits.set(fileId, { peerId, timestamp: Date.now() });
+      }
       this.handleRemoteUpdate(fileId, update);
     });
 
-    // ── CRDT → Transport ──
+    // ── CRDT → Transport (with propagation gate + lock check) ──
 
     this.crdt.on("local-update", (path: string, update: Uint8Array) => {
-      if (this._state === "syncing") {
-        this.transport.sendUpdate(path, update);
-        this.totalOps++;
-        this.opsInWindow++;
+      if (this._state !== "syncing") return;
+
+      // Layer 2: Check if file is locked by another peer
+      if (this.locks.isLockedByOther(path, this.peerId)) {
+        this.enqueueGatedUpdate(path, update);
+        return;
       }
+
+      // Layer 1: Check propagation gate (remote edit recency + awareness)
+      if (this.shouldGate(path)) {
+        this.enqueueGatedUpdate(path, update);
+        return;
+      }
+
+      // No gate — propagate immediately
+      this.transport.sendUpdate(path, update);
+      this.totalOps++;
+      this.opsInWindow++;
+    });
+
+    // ── Lock events → drain gate queue on release/expiry ──
+
+    this.locks.on("lock-released", (path: string) => {
+      this.drainFileQueue(path);
+    });
+
+    this.locks.on("lock-expired", (lock: FileLock) => {
+      this.drainFileQueue(lock.path);
     });
 
     // ── Manifest → Transport ──
@@ -409,6 +457,9 @@ export class SyncOrchestrator extends EventEmitter {
 
       await writeFile(absPath, content, "utf-8");
 
+      // Layer 3: Syntax guard — check for merge corruption on code files
+      this.checkMergeCorruption(fileId, content);
+
       // Update manifest
       this.manifest.setFile(fileId, {
         exists: true,
@@ -448,6 +499,12 @@ export class SyncOrchestrator extends EventEmitter {
     this.watcher.start();
     this.crdt.startUnloadTimer(this.persistence);
     this.awareness.startBroadcasting();
+    this.locks.startExpiryCheck();
+
+    // Start gate drain timer (Layer 1)
+    this.gateDrainTimer = setInterval(() => {
+      this.drainGateQueue();
+    }, GATE_DRAIN_INTERVAL_MS);
 
     // Start stats tracking
     this.statsTimer = setInterval(() => {
@@ -575,6 +632,212 @@ export class SyncOrchestrator extends EventEmitter {
   }
 
   /**
+   * Get active merge warnings.
+   */
+  getMergeWarnings(): MergeWarning[] {
+    return [...this.mergeWarnings.values()];
+  }
+
+  // ─── Propagation Gate (Layer 1) ────────────────────────
+
+  /**
+   * Check if a file should be gated (local updates queued instead of propagated).
+   * Gate is active when:
+   * 1. A remote update for this file was received within GATE_WINDOW_MS, OR
+   * 2. Another peer is listed as editing this file in awareness data.
+   */
+  private shouldGate(path: string): boolean {
+    // Check remote edit recency
+    const recentEdit = this.recentRemoteEdits.get(path);
+    if (recentEdit && Date.now() - recentEdit.timestamp < GATE_WINDOW_MS) {
+      return true;
+    }
+
+    // Check awareness — is another peer editing this file?
+    const editors = this.awareness.getFileEditors(path);
+    if (editors.length > 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Enqueue a local update in the gate queue for later propagation.
+   * If queue overflows, force-drain to prevent data loss (NFR-2).
+   */
+  private enqueueGatedUpdate(path: string, update: Uint8Array): void {
+    let queue = this.gateQueue.get(path);
+    if (!queue) {
+      queue = [];
+      this.gateQueue.set(path, queue);
+    }
+
+    // Check overflow before enqueue
+    const totalQueued = Array.from(this.gateQueue.values()).reduce((sum, q) => sum + q.length, 0);
+    if (totalQueued >= MAX_BUFFERED_UPDATES || this.gateQueueBytes + update.byteLength > MAX_BUFFERED_BYTES) {
+      // Force-drain everything to prevent data loss
+      this.emit("gate-overflow", path);
+      this.forceFlushGateQueue();
+      // Send the current update directly
+      this.transport.sendUpdate(path, update);
+      this.totalOps++;
+      this.opsInWindow++;
+      return;
+    }
+
+    queue.push({ update, timestamp: Date.now() });
+    this.gateQueueBytes += update.byteLength;
+  }
+
+  /**
+   * Check all gated files and drain queues where the gate has cleared.
+   * Called every GATE_DRAIN_INTERVAL_MS.
+   */
+  private drainGateQueue(): void {
+    if (this._state !== "syncing") return;
+
+    for (const [path, queue] of this.gateQueue) {
+      // Skip if still gated or locked by another peer
+      if (this.locks.isLockedByOther(path, this.peerId)) continue;
+      if (this.shouldGate(path)) continue;
+
+      // Gate cleared — drain all queued updates for this file
+      this.drainFileQueue(path);
+    }
+  }
+
+  /**
+   * Drain all queued updates for a specific file.
+   */
+  private drainFileQueue(path: string): void {
+    const queue = this.gateQueue.get(path);
+    if (!queue || queue.length === 0) return;
+
+    for (const { update } of queue) {
+      this.transport.sendUpdate(path, update);
+      this.gateQueueBytes -= update.byteLength;
+      this.totalOps++;
+      this.opsInWindow++;
+    }
+    this.gateQueue.delete(path);
+  }
+
+  /**
+   * Force-flush all gate queues. Used on overflow to prevent data loss.
+   */
+  private forceFlushGateQueue(): void {
+    for (const [path, queue] of this.gateQueue) {
+      for (const { update } of queue) {
+        this.transport.sendUpdate(path, update);
+        this.totalOps++;
+        this.opsInWindow++;
+      }
+    }
+    this.gateQueue.clear();
+    this.gateQueueBytes = 0;
+  }
+
+  // ─── Syntax Guard (Layer 3) ───────────────────────────
+
+  /**
+   * Check merged content for corruption indicators.
+   * Only runs on code files (.ts, .tsx, .js, .jsx).
+   * Emits merge-warning events but does NOT revert — CRDT remains source of truth.
+   */
+  private checkMergeCorruption(path: string, content: string): void {
+    if (!/\.(ts|tsx|js|jsx)$/.test(path)) return;
+
+    const warnings: Array<{ type: MergeWarningType; detail: string }> = [];
+
+    // Check for duplicate consecutive import lines
+    const lines = content.split("\n");
+    const importLines: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (/^import\s/.test(trimmed)) {
+        if (importLines.includes(trimmed)) {
+          warnings.push({
+            type: "duplicate-import",
+            detail: `Duplicate import: ${trimmed.slice(0, 80)}`,
+          });
+          break; // One warning per type per file
+        }
+        importLines.push(trimmed);
+      }
+    }
+
+    // Check for unbalanced braces
+    let braceCount = 0;
+    let bracketCount = 0;
+    let inString = false;
+    let stringChar = "";
+    for (let i = 0; i < content.length; i++) {
+      const ch = content[i];
+      const prev = i > 0 ? content[i - 1] : "";
+
+      if (inString) {
+        if (ch === stringChar && prev !== "\\") {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch === '"' || ch === "'" || ch === "`") {
+        inString = true;
+        stringChar = ch;
+        continue;
+      }
+
+      if (ch === "/" && content[i + 1] === "/") {
+        // Skip to end of line
+        while (i < content.length && content[i] !== "\n") i++;
+        continue;
+      }
+
+      if (ch === "{") braceCount++;
+      else if (ch === "}") braceCount--;
+      else if (ch === "[") bracketCount++;
+      else if (ch === "]") bracketCount--;
+    }
+
+    if (braceCount !== 0) {
+      warnings.push({
+        type: "unbalanced-braces",
+        detail: `Unbalanced braces: ${braceCount > 0 ? `${braceCount} unclosed` : `${-braceCount} extra closing`}`,
+      });
+    }
+
+    if (bracketCount !== 0) {
+      warnings.push({
+        type: "unbalanced-braces",
+        detail: `Unbalanced brackets: ${bracketCount > 0 ? `${bracketCount} unclosed` : `${-bracketCount} extra closing`}`,
+      });
+    }
+
+    // Emit warnings and update tracking
+    if (warnings.length > 0) {
+      for (const w of warnings) {
+        const warning: MergeWarning = {
+          path,
+          type: w.type,
+          detail: w.detail,
+          timestamp: Date.now(),
+        };
+        this.mergeWarnings.set(`${path}:${w.type}`, warning);
+        this.emit("merge-warning", warning);
+      }
+    } else {
+      // Clear previous warnings for this file if content is now clean
+      for (const key of this.mergeWarnings.keys()) {
+        if (key.startsWith(`${path}:`)) {
+          this.mergeWarnings.delete(key);
+        }
+      }
+    }
+  }
+
+  /**
    * Graceful shutdown: persist state, stop all components.
    */
   async stop(): Promise<void> {
@@ -586,8 +849,17 @@ export class SyncOrchestrator extends EventEmitter {
       this.statsTimer = null;
     }
 
+    // Stop gate drain timer
+    if (this.gateDrainTimer) {
+      clearInterval(this.gateDrainTimer);
+      this.gateDrainTimer = null;
+    }
+
     // Stop awareness
     this.awareness.dispose();
+
+    // Stop lock manager
+    this.locks.dispose();
 
     // Persist CRDT state
     await this.crdt.persistAll(this.persistence);

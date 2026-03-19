@@ -14,6 +14,15 @@ export const WRITE_TOKEN_TTL_MS = 5_000;
 export const RECONNECT_MAX_DELAY_MS = 30_000;
 export const RENAME_DETECTION_WINDOW_MS = 500;
 
+// ─── File Locking ───────────────────────────────────────────
+
+export const GATE_WINDOW_MS = 10_000;           // 10s gate window for remote edit recency
+export const GATE_DRAIN_INTERVAL_MS = 2_000;    // check drain every 2s
+export const DEFAULT_LEASE_MS = 30_000;          // 30s default lock lease
+export const MAX_LEASE_MS = 120_000;             // 2min max lease
+export const MAX_LOCKS = 100;                    // max concurrent locks per daemon
+export const LOCK_EXPIRY_CHECK_MS = 5_000;       // check for expired locks every 5s
+
 // ─── Rate Limits ─────────────────────────────────────────────
 
 export const RATE_LIMIT_JOINS_PER_MINUTE = 10;

@@ -1,4 +1,4 @@
-import type { DaemonStatus, PeerInfo, DaemonState } from "@mflow/shared";
+import type { DaemonStatus, PeerInfo, DaemonState, FileLock, MergeWarning } from "@mflow/shared";
 
 // ─── ANSI Colors ────────────────────────────────────────────
 
@@ -57,6 +57,16 @@ export function displayStatus(status: DaemonStatus): void {
     console.log("");
     displayPeers(status.peers);
   }
+
+  if (status.locks && status.locks.length > 0) {
+    console.log("");
+    displayLocks(status.locks);
+  }
+
+  if (status.mergeWarnings && status.mergeWarnings.length > 0) {
+    console.log("");
+    displayMergeWarnings(status.mergeWarnings);
+  }
 }
 
 export function displayPeers(peers: PeerInfo[]): void {
@@ -81,4 +91,22 @@ export function displayWarning(message: string): void {
 
 export function displayInfo(message: string): void {
   console.log(`${dim("›")} ${message}`);
+}
+
+export function displayLocks(locks: FileLock[]): void {
+  console.log(bold("  Locks:"));
+  const now = Date.now();
+  for (const lock of locks) {
+    const remaining = Math.max(0, Math.ceil((lock.expiresAt - now) / 1000));
+    console.log(
+      `    ${yellow("⊘")} ${lock.path} ${dim("—")} ${lock.holderName} ${dim(`(${remaining}s remaining)`)}`,
+    );
+  }
+}
+
+export function displayMergeWarnings(warnings: MergeWarning[]): void {
+  console.log(bold("  Merge Warnings:"));
+  for (const w of warnings) {
+    console.log(`    ${red("⚠")} ${w.path} ${dim("—")} ${w.type}: ${w.detail}`);
+  }
 }

@@ -9,6 +9,9 @@ import { pauseCommand } from "./commands/pause.js";
 import { resumeCommand } from "./commands/resume.js";
 import { ignoreCommand } from "./commands/ignore.js";
 import { initCommand } from "./commands/init.js";
+import { lockCommand } from "./commands/lock.js";
+import { unlockCommand } from "./commands/unlock.js";
+import { locksCommand } from "./commands/locks.js";
 import { displayError } from "./display.js";
 
 // ─── CLI Entry Point ────────────────────────────────────────
@@ -108,6 +111,50 @@ program
   .action(async (pattern: string) => {
     try {
       await ignoreCommand(getProjectRoot(), pattern);
+    } catch (err) {
+      displayError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    }
+  });
+
+// ── mflow lock ──
+
+program
+  .command("lock <path>")
+  .description("Acquire a file lock to prevent sync collisions")
+  .option("-d, --duration <duration>", "Lock lease duration (e.g., 30s, 2m)", "30s")
+  .action(async (path: string, opts: { duration?: string }) => {
+    try {
+      await lockCommand(getProjectRoot(), path, opts);
+    } catch (err) {
+      displayError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    }
+  });
+
+// ── mflow unlock ──
+
+program
+  .command("unlock <path>")
+  .description("Release a file lock")
+  .option("-f, --force", "Force-release any lock on this file (admin override)")
+  .action(async (path: string, opts: { force?: boolean }) => {
+    try {
+      await unlockCommand(getProjectRoot(), path, opts);
+    } catch (err) {
+      displayError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    }
+  });
+
+// ── mflow locks ──
+
+program
+  .command("locks")
+  .description("List all active file locks")
+  .action(async () => {
+    try {
+      await locksCommand(getProjectRoot());
     } catch (err) {
       displayError(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;

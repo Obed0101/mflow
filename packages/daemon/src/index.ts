@@ -9,6 +9,7 @@ export { ManifestManager, type ManifestEvents } from "./manifest.js";
 export { CRDTPersistence } from "./persistence.js";
 export { AwarenessManager, type AwarenessManagerEvents, type AwarenessManagerOptions } from "./awareness.js";
 export { GitDetector, type GitDetectorEvents } from "./git.js";
+export { FileLockManager, type FileLockManagerEvents } from "./file-lock-manager.js";
 export { SyncOrchestrator, type SyncOrchestratorEvents, type SyncOrchestratorOptions, type SyncStats } from "./sync.js";
 export { IPCServer, type IPCServerOptions, type IPCHandler } from "./ipc.js";
 export { MflowDaemon, type DaemonOptions, type DaemonEvents } from "./daemon.js";

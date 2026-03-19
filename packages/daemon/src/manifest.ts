@@ -89,6 +89,14 @@ export class ManifestManager extends EventEmitter {
     return count;
   }
 
+  /**
+   * Check if a file is already tracked in the manifest.
+   */
+  hasFile(path: string): boolean {
+    const entry = this.map.get(path);
+    return entry !== undefined && entry.exists;
+  }
+
   // ─── Write Operations ───────────────────────────────────
 
   /**

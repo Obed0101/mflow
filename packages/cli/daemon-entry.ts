@@ -8,7 +8,7 @@ import { MflowDaemon } from "../daemon/src/daemon.js";
 import { IPCServer, type IPCHandler } from "../daemon/src/ipc.js";
 import { WSRelayTransport } from "../daemon/src/ws-relay-transport.js";
 import { WeriftTransport } from "../daemon/src/transport.js";
-import type { ITransport, IPCResponse, PauseSource } from "@mflow/shared";
+import type { ITransport, IPCResponse, PauseSource, FileLock } from "@mflow/shared";
 import {
   DEFAULT_SIGNALING_URL,
   DEFAULT_STUN_SERVERS,
@@ -104,6 +104,28 @@ const ipcHandler: IPCHandler = {
   },
   async handleHealth(): Promise<IPCResponse> {
     return { type: "status", data: daemon.getStatus() };
+  },
+  async handleLock(path: string, leaseDurationMs?: number, _source?: PauseSource): Promise<IPCResponse> {
+    try {
+      const result = daemon.acquireLock(path, leaseDurationMs);
+      return { type: "lock-result", data: result };
+    } catch (err) {
+      return { type: "error", message: err instanceof Error ? err.message : "Lock failed" };
+    }
+  },
+  async handleUnlock(path: string, source?: PauseSource, force?: boolean): Promise<IPCResponse> {
+    // Force unlock requires source="user" (admin override)
+    if (force && source !== "user") {
+      return { type: "error", message: "Force unlock requires source=\"user\" (CLI only)" };
+    }
+    const released = daemon.releaseLock(path, force);
+    if (!released) {
+      return { type: "error", message: "Not the lock holder" };
+    }
+    return { type: "ok" };
+  },
+  async handleLockQuery(path?: string): Promise<IPCResponse> {
+    return { type: "locks", data: daemon.queryLocks(path) };
   },
 };
 
