@@ -7,7 +7,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import { unlink, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { existsSync } from "node:fs";
-import type { IPCRequest, IPCResponse } from "@mflow/shared";
+import type { IPCRequest, IPCResponse, PauseSource } from "@mflow/shared";
 import { IPCRequestSchema } from "@mflow/shared";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -18,8 +18,8 @@ export interface IPCServerOptions {
 
 export interface IPCHandler {
   handleStatus(): Promise<IPCResponse>;
-  handlePause(): Promise<IPCResponse>;
-  handleResume(): Promise<IPCResponse>;
+  handlePause(source?: PauseSource, id?: string): Promise<IPCResponse>;
+  handleResume(source?: PauseSource, id?: string, force?: boolean): Promise<IPCResponse>;
   handleStop(): Promise<IPCResponse>;
   handleIgnore(pattern: string): Promise<IPCResponse>;
   handlePeers(): Promise<IPCResponse>;
@@ -187,9 +187,9 @@ export class IPCServer {
       case "status":
         return handler.handleStatus();
       case "pause":
-        return handler.handlePause();
+        return handler.handlePause(request.source, request.id);
       case "resume":
-        return handler.handleResume();
+        return handler.handleResume(request.source, request.id, request.force);
       case "stop":
         return handler.handleStop();
       case "ignore":

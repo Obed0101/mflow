@@ -17,7 +17,6 @@ const STATE_COLORS: Record<DaemonState, (s: string) => string> = {
   connecting: yellow,
   syncing: green,
   paused: yellow,
-  git_paused: yellow,
   reconnecting: red,
   stopping: dim,
 };

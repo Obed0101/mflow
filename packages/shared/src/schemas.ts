@@ -125,10 +125,21 @@ export const SignalingMessageSchema = z.discriminatedUnion("type", [
 
 // ─── IPC Schemas ─────────────────────────────────────────────
 
+const PauseSourceSchema = z.enum(["user", "git", "mcp", "auto"]);
+
 export const IPCRequestSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("status") }),
-  z.object({ type: z.literal("pause") }),
-  z.object({ type: z.literal("resume") }),
+  z.object({
+    type: z.literal("pause"),
+    source: PauseSourceSchema.optional(),
+    id: z.string().min(1).max(256).optional(),
+  }),
+  z.object({
+    type: z.literal("resume"),
+    source: PauseSourceSchema.optional(),
+    id: z.string().min(1).max(256).optional(),
+    force: z.boolean().optional(),
+  }),
   z.object({ type: z.literal("stop") }),
   z.object({ type: z.literal("ignore"), pattern: z.string().min(1) }),
   z.object({ type: z.literal("peers") }),

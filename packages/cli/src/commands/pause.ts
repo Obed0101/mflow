@@ -5,7 +5,7 @@ import { displaySuccess, displayError } from "../display.js";
 
 export async function pauseCommand(projectRoot: string): Promise<void> {
   try {
-    const response = await sendIPC(projectRoot, { type: "pause" });
+    const response = await sendIPC(projectRoot, { type: "pause", source: "user" });
     if (response.type === "ok") {
       displaySuccess("Sync paused — incoming changes will be buffered");
     } else if (response.type === "error") {

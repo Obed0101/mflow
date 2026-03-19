@@ -90,9 +90,10 @@ program
 program
   .command("resume")
   .description("Resume sync and apply buffered changes")
-  .action(async () => {
+  .option("-f, --force", "Force-clear all pause reasons (admin override)")
+  .action(async (options: { force?: boolean }) => {
     try {
-      await resumeCommand(getProjectRoot());
+      await resumeCommand(getProjectRoot(), { force: options.force });
     } catch (err) {
       displayError(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;

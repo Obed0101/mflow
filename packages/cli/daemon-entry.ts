@@ -8,7 +8,7 @@ import { MflowDaemon } from "../daemon/src/daemon.js";
 import { IPCServer, type IPCHandler } from "../daemon/src/ipc.js";
 import { WSRelayTransport } from "../daemon/src/ws-relay-transport.js";
 import { WeriftTransport } from "../daemon/src/transport.js";
-import type { ITransport, IPCResponse } from "@mflow/shared";
+import type { ITransport, IPCResponse, PauseSource } from "@mflow/shared";
 import {
   DEFAULT_SIGNALING_URL,
   DEFAULT_STUN_SERVERS,
@@ -82,12 +82,12 @@ const ipcHandler: IPCHandler = {
   async handleStatus(): Promise<IPCResponse> {
     return { type: "status", data: daemon.getStatus() };
   },
-  async handlePause(): Promise<IPCResponse> {
-    daemon.pause();
+  async handlePause(source?: PauseSource, id?: string): Promise<IPCResponse> {
+    daemon.pause(source ?? "user", id);
     return { type: "ok" };
   },
-  async handleResume(): Promise<IPCResponse> {
-    daemon.resume();
+  async handleResume(source?: PauseSource, id?: string, force?: boolean): Promise<IPCResponse> {
+    daemon.resume(source ?? "user", id, force);
     return { type: "ok" };
   },
   async handleStop(): Promise<IPCResponse> {

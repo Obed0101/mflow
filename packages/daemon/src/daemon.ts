@@ -8,6 +8,7 @@ import type {
   DaemonStatus,
   ITransport,
   MflowConfig,
+  PauseSource,
   PeerInfo,
   PeerType,
 } from "@mflow/shared";
@@ -226,17 +227,22 @@ export class MflowDaemon extends EventEmitter {
   // ─── Pause / Resume ──────────────────────────────────────
 
   /**
-   * Pause sync (buffer incoming changes, stop broadcasting local changes).
+   * Pause sync with a tracked reason. Multiple sources can pause concurrently.
    */
-  pause(): void {
-    this.sync?.pause();
+  pause(source: PauseSource = "user", id?: string): void {
+    this.sync?.addPause({
+      source,
+      id: id ?? crypto.randomUUID(),
+      timestamp: Date.now(),
+    });
   }
 
   /**
-   * Resume sync (apply buffered changes, resume broadcasting).
+   * Resume sync by removing pause reasons for the given source.
+   * With force=true and source="user", clears all pause reasons (admin override).
    */
-  resume(): void {
-    this.sync?.resume();
+  resume(source: PauseSource = "user", id?: string, force?: boolean): void {
+    this.sync?.removePause(source, id, force);
   }
 
   // ─── Status ──────────────────────────────────────────────
@@ -255,6 +261,7 @@ export class MflowDaemon extends EventEmitter {
       opsPerSecond: stats?.opsPerSecond ?? 0,
       uptime: this.startTime > 0 ? Date.now() - this.startTime : 0,
       memoryUsageMB: Math.round(process.memoryUsage.rss() / 1_048_576),
+      pauseReasons: this.sync?.getActivePauseReasons() ?? [],
     };
   }
 

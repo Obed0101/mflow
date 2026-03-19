@@ -3,14 +3,19 @@ import { z } from "zod";
 import { sendIPC } from "../ipc-client.js";
 
 export function registerSyncControlTools(server: McpServer, projectRoot: string): void {
+  // Track MCP pause IDs so resume can clear the correct reason
+  let activePauseId: string | null = null;
+
   server.tool(
     "mflow_pause",
     "Pause outgoing sync — local changes are buffered, incoming changes are queued. Use before large refactors to avoid flooding peers with intermediate states",
     async () => {
       try {
-        const response = await sendIPC(projectRoot, { type: "pause" });
+        const id = `mcp-${crypto.randomUUID()}`;
+        const response = await sendIPC(projectRoot, { type: "pause", source: "mcp", id });
         if (response.type === "ok") {
-          return { content: [{ type: "text", text: "Sync paused. Local changes are being buffered. Use mflow_resume when ready." }] };
+          activePauseId = id;
+          return { content: [{ type: "text", text: `Sync paused (reason: ${id}). Local changes are being buffered. Use mflow_resume when ready.` }] };
         }
         if (response.type === "error") {
           return { content: [{ type: "text", text: `Error: ${response.message}` }], isError: true };
@@ -27,11 +32,16 @@ export function registerSyncControlTools(server: McpServer, projectRoot: string)
 
   server.tool(
     "mflow_resume",
-    "Resume sync after a pause — applies all buffered updates and resumes real-time sync",
+    "Resume sync after a pause — applies all buffered updates and resumes real-time sync. Clears MCP and auto pause reasons.",
     async () => {
       try {
-        const response = await sendIPC(projectRoot, { type: "resume" });
+        const response = await sendIPC(projectRoot, {
+          type: "resume",
+          source: "mcp",
+          id: activePauseId ?? undefined,
+        });
         if (response.type === "ok") {
+          activePauseId = null;
           return { content: [{ type: "text", text: "Sync resumed. Buffered changes are being applied." }] };
         }
         if (response.type === "error") {

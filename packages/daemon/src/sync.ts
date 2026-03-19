@@ -6,6 +6,8 @@ import type {
   ITransport,
   ManifestEntry,
   MflowConfig,
+  PauseReason,
+  PauseSource,
 } from "@mflow/shared";
 import {
   MAX_FILE_SIZE_BYTES,
@@ -99,7 +101,7 @@ export interface SyncOrchestratorOptions {
  * - Local changes:  FileWatcher → CRDTManager → Transport → Remote peers
  * - Remote changes: Transport → CRDTManager → WriteRegistry → Filesystem
  *
- * Handles state transitions (syncing, paused, git_paused) and
+ * Handles state transitions (syncing, paused via PauseReason set) and
  * manages the lifecycle of all sub-components.
  */
 export class SyncOrchestrator extends EventEmitter {
@@ -122,7 +124,8 @@ export class SyncOrchestrator extends EventEmitter {
   private opsPerSecond = 0;
   private statsTimer: ReturnType<typeof setInterval> | null = null;
 
-  // Pause state
+  // Pause state — set-based model for concurrent pause sources
+  readonly pauseReasons: Map<string, PauseReason> = new Map();
   private bufferedUpdates: Array<{ path: string; update: Uint8Array }> = [];
   private bufferedBytes = 0;
 
@@ -165,14 +168,27 @@ export class SyncOrchestrator extends EventEmitter {
 
   // ─── State ──────────────────────────────────────────────
 
+  /**
+   * Whether any pause reasons are active. Derived from pauseReasons map.
+   */
+  get isPaused(): boolean {
+    return this.pauseReasons.size > 0;
+  }
+
+  /**
+   * Effective daemon state. "paused" is derived from pauseReasons;
+   * all other states come from _state.
+   */
   get state(): DaemonState {
+    if (this._state === "stopping") return "stopping";
+    if (this.isPaused) return "paused";
     return this._state;
   }
 
   private setState(state: DaemonState): void {
     if (this._state === state) return;
     this._state = state;
-    this.emit("state-changed", state);
+    this.emit("state-changed", this.state);
   }
 
   // ─── Wiring ─────────────────────────────────────────────
@@ -229,17 +245,12 @@ export class SyncOrchestrator extends EventEmitter {
 
     this.git.on("git-operation-start", () => {
       if (this._state === "syncing") {
-        this.setState("git_paused");
+        this.addPause({ source: "git", id: "index-lock", timestamp: Date.now() });
       }
     });
 
     this.git.on("git-operation-end", () => {
-      if (this._state === "git_paused") {
-        // Re-scan files after git operation
-        this.setState("scanning");
-        // The watcher is still running and will pick up changes
-        this.setState("syncing");
-      }
+      this.removePause("git", "index-lock");
     });
 
     // ── Awareness ──
@@ -250,7 +261,7 @@ export class SyncOrchestrator extends EventEmitter {
   // ─── Local Change Handlers ──────────────────────────────
 
   private handleLocalChange(path: string, content: string): void {
-    if (this._state !== "syncing") return;
+    if (this._state !== "syncing" || this.isPaused) return;
     if (!isWithinProject(this.projectRoot, path)) {
       this.emit("sync-error", path, new Error(`Path traversal blocked: ${path}`));
       return;
@@ -290,7 +301,7 @@ export class SyncOrchestrator extends EventEmitter {
   }
 
   private handleLocalCreate(path: string, content: string): void {
-    if (this._state !== "syncing") return;
+    if (this._state !== "syncing" || this.isPaused) return;
     if (!isWithinProject(this.projectRoot, path)) {
       this.emit("sync-error", path, new Error(`Path traversal blocked: ${path}`));
       return;
@@ -318,7 +329,7 @@ export class SyncOrchestrator extends EventEmitter {
   }
 
   private handleLocalDelete(path: string): void {
-    if (this._state !== "syncing") return;
+    if (this._state !== "syncing" || this.isPaused) return;
     this.manifest.deleteFile(path);
   }
 
@@ -331,7 +342,7 @@ export class SyncOrchestrator extends EventEmitter {
       return;
     }
 
-    if (this._state === "paused") {
+    if (this.isPaused) {
       // FIX 5: Bounded pause buffer — drop oldest when limits exceeded
       if (
         this.bufferedUpdates.length >= MAX_BUFFERED_UPDATES ||
@@ -347,7 +358,7 @@ export class SyncOrchestrator extends EventEmitter {
       return;
     }
 
-    if (this._state !== "syncing" && this._state !== "git_paused") return;
+    if (this._state !== "syncing") return;
 
     // Validate path stays within project root (prevents path traversal from remote peers)
     if (!isWithinProject(this.projectRoot, fileId)) {
@@ -466,26 +477,89 @@ export class SyncOrchestrator extends EventEmitter {
   }
 
   /**
-   * Pause sync (stop broadcasting local changes, buffer incoming).
+   * Add a pause reason. Multiple sources can pause concurrently;
+   * the daemon is paused as long as any reason remains.
    */
-  pause(): void {
-    if (this._state !== "syncing") return;
-    this.setState("paused");
+  addPause(reason: PauseReason): void {
+    const key = `${reason.source}:${reason.id}`;
+    this.pauseReasons.set(key, reason);
+    console.log(`[sync] pause added: ${key} (total: ${this.pauseReasons.size})`);
+    this.emit("state-changed", this.state);
   }
 
   /**
-   * Resume sync (apply buffered changes, resume broadcasting).
+   * Remove pause reasons. Priority enforcement:
+   * - "user" with force=true clears everything (admin override)
+   * - "user" without force clears only "user" reasons
+   * - "mcp" clears "mcp" and "auto" reasons
+   * - "git" clears only "git" reasons
+   * - "auto" clears only "auto" reasons
+   *
+   * If id is provided, removes only that specific reason.
    */
-  resume(): void {
-    if (this._state !== "paused") return;
-    this.setState("syncing");
-
-    // Apply buffered updates
-    for (const { path, update } of this.bufferedUpdates) {
-      void this.handleRemoteUpdate(path, update);
+  removePause(source: PauseSource, id?: string, force?: boolean): void {
+    if (force && source === "user") {
+      // Admin override — clear everything
+      this.pauseReasons.clear();
+      console.log("[sync] all pause reasons force-cleared by user");
+    } else if (id) {
+      // Remove specific reason
+      const key = `${source}:${id}`;
+      this.pauseReasons.delete(key);
+      console.log(`[sync] pause removed: ${key} (remaining: ${this.pauseReasons.size})`);
+    } else {
+      // Remove all reasons this source is allowed to clear
+      const allowedSources = this.getAllowedClearSources(source);
+      for (const key of [...this.pauseReasons.keys()]) {
+        const keySource = key.split(":")[0] as PauseSource;
+        if (allowedSources.includes(keySource)) {
+          this.pauseReasons.delete(key);
+        }
+      }
+      console.log(`[sync] pause reasons cleared for sources: ${allowedSources.join(",")} (remaining: ${this.pauseReasons.size})`);
     }
+
+    // If no more reasons, flush buffered updates
+    if (!this.isPaused) {
+      this.flushBufferedUpdates();
+    }
+    this.emit("state-changed", this.state);
+  }
+
+  /**
+   * Get the list of pause sources a given source is allowed to clear.
+   */
+  private getAllowedClearSources(source: PauseSource): PauseSource[] {
+    switch (source) {
+      case "user": return ["user"];
+      case "mcp":  return ["mcp", "auto"];
+      case "git":  return ["git"];
+      case "auto": return ["auto"];
+      default: {
+        const _exhaustive: never = source;
+        return [_exhaustive];
+      }
+    }
+  }
+
+  /**
+   * Apply all buffered remote updates. Called when all pause reasons are removed.
+   */
+  private flushBufferedUpdates(): void {
+    const updates = this.bufferedUpdates;
     this.bufferedUpdates = [];
     this.bufferedBytes = 0;
+    console.log(`[sync] flushing ${updates.length} buffered updates`);
+    for (const { path, update } of updates) {
+      void this.handleRemoteUpdate(path, update);
+    }
+  }
+
+  /**
+   * Get a snapshot of active pause reasons.
+   */
+  getActivePauseReasons(): PauseReason[] {
+    return [...this.pauseReasons.values()];
   }
 
   /**

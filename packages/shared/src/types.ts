@@ -31,6 +31,16 @@ export interface RoomInfo {
   createdAt: number;
 }
 
+// ─── Pause Model ────────────────────────────────────────────
+
+export type PauseSource = "user" | "git" | "mcp" | "auto";
+
+export interface PauseReason {
+  source: PauseSource;
+  id: string;        // e.g. "cli-session-abc" or "git-auto" or "mcp-agent-xyz"
+  timestamp: number;
+}
+
 // ─── Daemon ──────────────────────────────────────────────────
 
 export type DaemonState =
@@ -39,7 +49,6 @@ export type DaemonState =
   | "connecting"
   | "syncing"
   | "paused"
-  | "git_paused"
   | "reconnecting"
   | "stopping";
 
@@ -52,6 +61,7 @@ export interface DaemonStatus {
   opsPerSecond: number;
   uptime: number;
   memoryUsageMB: number;
+  pauseReasons: PauseReason[];
 }
 
 // ─── Manifest ────────────────────────────────────────────────
@@ -96,8 +106,8 @@ export interface ITransport {
 
 export type IPCRequest =
   | { type: "status" }
-  | { type: "pause" }
-  | { type: "resume" }
+  | { type: "pause"; source?: PauseSource; id?: string }
+  | { type: "resume"; source?: PauseSource; id?: string; force?: boolean }
   | { type: "stop" }
   | { type: "ignore"; pattern: string }
   | { type: "peers" }

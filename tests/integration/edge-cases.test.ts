@@ -438,68 +438,66 @@ describe("T6.3: Edge Cases", () => {
       }
     });
 
-    test("sync state semantics: git_paused gates re-entry to syncing", () => {
-      // Unit-level test of the state machine logic without standing up full SyncOrchestrator.
-      // Verify the documented state transitions from sync.ts wireComponents():
-      //   git-operation-start while "syncing"  → "git_paused"
-      //   git-operation-end   while "git_paused" → "scanning" then immediately "syncing"
-      //
-      // We test this by reproducing the transition conditions directly:
+    test("PauseReason set: git pause adds/removes reason, derived state reflects it", () => {
+      // Unit-level test of the PauseReason set model.
+      // git-operation-start adds a pause reason; git-operation-end removes it.
+      // The effective state is "paused" when any reason exists, "syncing" otherwise.
 
-      type SyncState = "syncing" | "git_paused" | "scanning" | "paused" | "stopping" | "starting" | "connecting" | "reconnecting";
+      type DaemonState = "syncing" | "paused" | "stopping" | "starting" | "scanning" | "connecting" | "reconnecting";
+      type PauseSource = "user" | "git" | "mcp" | "auto";
+      interface PauseReason { source: PauseSource; id: string; timestamp: number; }
 
-      let state: SyncState = "syncing";
-      const transitions: SyncState[] = [state];
+      const pauseReasons = new Map<string, PauseReason>();
+      const _state: DaemonState = "syncing";
 
-      const setState = (next: SyncState) => {
-        if (state !== next) {
-          state = next;
-          transitions.push(state);
-        }
+      const isPaused = () => pauseReasons.size > 0;
+      const effectiveState = (): DaemonState => {
+        if (_state === "stopping") return "stopping";
+        if (isPaused()) return "paused";
+        return _state;
       };
 
-      // Simulate git-operation-start handler
-      const onGitStart = () => {
-        if (state === "syncing") setState("git_paused");
-      };
+      // Initial: syncing, no pause reasons
+      expect(effectiveState()).toBe("syncing");
 
-      // Simulate git-operation-end handler
-      const onGitEnd = () => {
-        if (state === "git_paused") {
-          setState("scanning");
-          setState("syncing");
-        }
-      };
+      // git-operation-start: add pause reason
+      pauseReasons.set("git:index-lock", { source: "git", id: "index-lock", timestamp: Date.now() });
+      expect(effectiveState()).toBe("paused");
+      expect(pauseReasons.size).toBe(1);
 
-      onGitStart();
-      expect(state as string).toBe("git_paused");
-
-      onGitEnd();
-      expect(state as string).toBe("syncing");
-
-      // transitions should be: syncing → git_paused → scanning → syncing
-      expect(transitions as string[]).toEqual(["syncing", "git_paused", "scanning", "syncing"]);
+      // git-operation-end: remove pause reason
+      pauseReasons.delete("git:index-lock");
+      expect(effectiveState()).toBe("syncing");
+      expect(pauseReasons.size).toBe(0);
     });
 
-    test("git_paused does not transition on git-operation-start if already paused", () => {
-      // State guard: second git-operation-start while already git_paused must be a no-op.
-      // Mirrors the `if (state === "syncing")` guard in sync.ts.
+    test("PauseReason set: multiple concurrent sources — all must be cleared to resume", () => {
+      // Verifies the core concurrency fix: user + git can pause simultaneously.
+      // Removing one source does not accidentally resume if another source is still active.
 
-      type SyncState = "syncing" | "git_paused";
-      let state: SyncState = "git_paused"; // already in git_paused
-      let transitionCount = 0;
+      type PauseSource = "user" | "git" | "mcp" | "auto";
+      interface PauseReason { source: PauseSource; id: string; timestamp: number; }
 
-      const onGitStart = () => {
-        if (state === "syncing") {
-          state = "git_paused";
-          transitionCount++;
-        }
-      };
+      const pauseReasons = new Map<string, PauseReason>();
+      const isPaused = () => pauseReasons.size > 0;
 
-      onGitStart(); // should be a no-op
+      // User pauses
+      pauseReasons.set("user:cli-abc", { source: "user", id: "cli-abc", timestamp: Date.now() });
+      expect(isPaused()).toBe(true);
 
-      expect(state).toBe("git_paused");
-      expect(transitionCount).toBe(0);
+      // Git also pauses
+      pauseReasons.set("git:index-lock", { source: "git", id: "index-lock", timestamp: Date.now() });
+      expect(isPaused()).toBe(true);
+      expect(pauseReasons.size).toBe(2);
+
+      // Git finishes — but user pause remains
+      pauseReasons.delete("git:index-lock");
+      expect(isPaused()).toBe(true);
+      expect(pauseReasons.size).toBe(1);
+
+      // User resumes — now fully unpaused
+      pauseReasons.delete("user:cli-abc");
+      expect(isPaused()).toBe(false);
     });
   });
 });
