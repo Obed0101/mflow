@@ -65,9 +65,10 @@ program
 program
   .command("status")
   .description("Show daemon status, peers, and sync stats")
-  .action(async () => {
+  .option("-w, --watch", "Live-updating terminal dashboard")
+  .action(async (opts: { watch?: boolean }) => {
     try {
-      await statusCommand(getProjectRoot());
+      await statusCommand(getProjectRoot(), { watch: opts.watch });
     } catch (err) {
       displayError(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;
