@@ -100,9 +100,9 @@ export const SignalingSignalSchema = z.object({
 
 export const SignalingRelaySchema = z.object({
   type: z.literal("relay"),
-  to: z.string().min(1),
-  from: z.string().min(1),
-  data: z.string().min(1), // base64-encoded encrypted binary
+  to: z.string().min(1).max(256),
+  from: z.string().min(1).max(256),
+  data: z.string().min(1).max(65_536), // base64-encoded encrypted binary, 64KB max
 });
 
 export const SignalingMessageSchema = z.discriminatedUnion("type", [

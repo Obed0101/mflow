@@ -6,6 +6,7 @@ import {
   UNAUTHENTICATED_TIMEOUT_MS,
   MAX_UNAUTHENTICATED_PER_IP,
   MAX_UNAUTHENTICATED_GLOBAL,
+  WS_MAX_PAYLOAD_BYTES,
 } from "@mflow/shared";
 import type { HealthResponse } from "@mflow/shared";
 import { RoomManager, type PeerContext } from "./rooms.js";
@@ -86,6 +87,13 @@ function handleMessage(
   ws: ServerWebSocket<PeerContext>,
   raw: string | Buffer,
 ): void {
+  // Pre-parse size check — reject oversized messages before JSON.parse
+  const rawLen = typeof raw === "string" ? raw.length : raw.byteLength;
+  if (rawLen > WS_MAX_PAYLOAD_BYTES) {
+    sendError(ws, "MESSAGE_TOO_LARGE", `Message exceeds ${WS_MAX_PAYLOAD_BYTES} bytes`);
+    return;
+  }
+
   const ip = getIp(ws);
 
   // Rate limit messages
@@ -290,6 +298,8 @@ const server = Bun.serve<PeerContext>({
   },
 
   websocket: {
+    maxPayloadLength: WS_MAX_PAYLOAD_BYTES,
+
     open(ws) {
       if (!trackUnauthSocket(ws)) {
         ws.close(1008, "Too many unauthenticated connections");
