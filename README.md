@@ -373,50 +373,75 @@ Cons: May fail behind corporate firewalls or symmetric NAT.
 
 ---
 
-## Pause/Resume Concurrency
+## Pause/Resume: How It Handles Multiple Agents + Humans
 
-Mflow supports multiple simultaneous pause sources. This is critical when humans and AI agents share a room.
+When 3 AI agents and a human share a room, anyone can pause and resume at any time. Mflow handles this safely.
 
-### The Problem
+### The Short Version
 
-Without concurrency handling, this happens:
+Each pause creates a **reason** with a unique ID. Sync only resumes when **all reasons are cleared**. Nobody can accidentally undo someone else's pause.
 
-```
-User:  mflow pause        (preparing to git commit)
-Agent: mflow_resume       (MCP tool, doesn't know user is mid-commit)
-Result: sync resumes → files change during git commit → corrupted index
-```
-
-### How Mflow Solves It
-
-Pause/resume uses a **set of reasons**, not a simple on/off switch. Each source tracks its own pause reason independently. Sync resumes only when ALL reasons are cleared.
+### Example: Human + 2 Agents
 
 ```
-User pauses:   pauseReasons = { "user:cli-session-1" }         → paused
-Git starts:    pauseReasons = { "user:cli-session-1", "git:index-lock" }  → still paused
-Git finishes:  pauseReasons = { "user:cli-session-1" }         → still paused (user hasn't resumed)
-User resumes:  pauseReasons = { }                              → syncing (all reasons cleared)
+1. Agent A pauses (doing a multi-file refactor)
+   Active pauses: [ agent-a ]
+   Status: PAUSED
+
+2. Human pauses (about to git commit)
+   Active pauses: [ agent-a, human ]
+   Status: PAUSED
+
+3. Agent A finishes, resumes
+   Active pauses: [ human ]             ← agent-a's reason removed
+   Status: STILL PAUSED                 ← human's reason still active
+
+4. Agent B calls resume (doesn't know human is mid-commit)
+   Active pauses: [ human ]             ← nothing happens, agent B had no pause
+   Status: STILL PAUSED                 ← human is protected
+
+5. Human finishes git commit, resumes
+   Active pauses: [ ]                   ← all reasons cleared
+   Status: SYNCING                      ← sync resumes, buffered changes applied
 ```
 
-### Priority Rules
+Key point: **Agent B's resume in step 4 does nothing** because Agent B never paused. You can only remove your own pause, not someone else's.
 
-| Source | Can Clear |
-|--------|-----------|
-| `user` (CLI) | Everything (with `--force`), or just own reasons |
-| `mcp` (AI agent) | `mcp` and `auto` reasons |
-| `git` (auto-detect) | Only `git` reasons |
-| `auto` (system) | Only `auto` reasons |
+### Example: 5 Agents Working in Parallel
 
-An AI agent calling `mflow_resume` cannot unpause a human's pause. The human's intent is always preserved.
-
-### Force Resume (Admin Override)
-
-```bash
-# Clear ALL pause reasons regardless of source
-mflow resume --force
+```
+Agent A pauses:  pauses = { A }
+Agent B pauses:  pauses = { A, B }
+Agent C pauses:  pauses = { A, B, C }
+Agent B resumes: pauses = { A, C }       ← only B's reason removed
+Agent A resumes: pauses = { C }          ← only A's reason removed
+Agent C resumes: pauses = { }            ← all clear, sync resumes
 ```
 
-Use this when something gets stuck or you need to override all pauses.
+No conflicts. No races. Each agent manages its own pause independently.
+
+### Who Can Override Whom?
+
+| Who | Can unpause |
+|-----|-------------|
+| Human (CLI) | Only their own pauses. Or `--force` to clear everything. |
+| AI Agent (MCP) | Only their own pauses. Cannot touch human or other agent pauses. |
+| Git (auto) | Only git-related pauses. Cannot touch human or agent pauses. |
+
+The human always has the final word via `mflow resume --force` (clears all pauses from all sources).
+
+### Why This Matters
+
+Without this model, a common disaster:
+
+```
+Human: mflow pause           ← preparing to git commit
+Agent: mflow_resume           ← doesn't know, just wants sync back
+       sync resumes!          ← files change during git commit
+       git index corrupted    ← disaster
+```
+
+With the pause-reason model, the agent's resume **does nothing** because it has no active pause to remove. The human's pause is untouchable until the human explicitly resumes.
 
 ---
 
