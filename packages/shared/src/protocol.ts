@@ -1,4 +1,4 @@
-import type { PeerInfo } from "./types.js";
+import type { PeerInfo, PeerType } from "./types.js";
 
 // ─── Signaling Protocol Messages ─────────────────────────────
 
@@ -9,6 +9,7 @@ export type SignalingMessage =
   | SignalingPeerLeft
   | SignalingSignal
   | SignalingRelay
+  | SignalingActivity
   | SignalingError;
 
 export interface SignalingJoin {
@@ -48,6 +49,23 @@ export interface SignalingRelay {
   to: string;
   from: string;
   data: string; // base64-encoded encrypted binary frame
+}
+
+export interface SignalingActivity {
+  type: "activity";
+  action: ActivityAction;
+  file: string;
+}
+
+export type ActivityAction = "synced" | "created" | "deleted";
+
+export interface ActivityEntry {
+  timestamp: number;
+  peerId: string;
+  peerName: string;
+  peerType: PeerType;
+  action: ActivityAction;
+  file: string;
 }
 
 export interface SignalingError {

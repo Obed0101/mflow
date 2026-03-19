@@ -337,6 +337,7 @@ export class SyncOrchestrator extends EventEmitter {
         });
 
         this.awareness.setCurrentFile(path);
+        this.transport.sendActivity("synced", path);
         this.emit("file-synced", path, "local");
       }
     } catch (err) {
@@ -366,6 +367,7 @@ export class SyncOrchestrator extends EventEmitter {
         size: Buffer.byteLength(content, "utf-8"),
       });
 
+      this.transport.sendActivity("created", path);
       this.emit("file-synced", path, "local");
     } catch (err) {
       this.emit(
@@ -378,6 +380,7 @@ export class SyncOrchestrator extends EventEmitter {
 
   private handleLocalDelete(path: string): void {
     if (this._state !== "syncing" || this.isPaused) return;
+    this.transport.sendActivity("deleted", path);
     this.manifest.deleteFile(path);
   }
 

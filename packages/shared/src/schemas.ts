@@ -105,10 +105,17 @@ export const SignalingRelaySchema = z.object({
   data: z.string().min(1).max(65_536), // base64-encoded encrypted binary, 64KB max
 });
 
+export const SignalingActivitySchema = z.object({
+  type: z.literal("activity"),
+  action: z.enum(["synced", "created", "deleted"]),
+  file: z.string().min(1).max(1024),
+});
+
 export const SignalingMessageSchema = z.discriminatedUnion("type", [
   SignalingJoinSchema,
   SignalingSignalSchema,
   SignalingRelaySchema,
+  SignalingActivitySchema,
   z.object({ type: z.literal("peer-joined"), peer: z.any() }),
   z.object({ type: z.literal("peer-left"), peerId: z.string() }),
   z.object({

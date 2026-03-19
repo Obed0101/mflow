@@ -4,7 +4,7 @@
  *
  * Two modes:
  * - Public (default): aggregate stats only, no room IDs or peer names
- * - Room-scoped: enter room secret, client-side SHA-256 hash, show only matching rooms
+ * - Room-scoped: enter room secret, client-side SHA-256 hash, show room + activity feed
  */
 
 export function getDashboardHtml(): string {
@@ -16,330 +16,481 @@ export function getDashboardHtml(): string {
   <title>mflow signaling server</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #0d1117;
-      color: #c9d1d9;
-      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', monospace;
+      background: #0a0a0a;
+      color: #fafafa;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.5;
       min-height: 100vh;
       padding: 24px;
     }
 
-    .container {
-      max-width: 720px;
-      margin: 0 auto;
-    }
+    .mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+    .container { max-width: 760px; margin: 0 auto; }
+
+    /* ─── Header ────────────────────────────────── */
 
     .header {
-      border: 1px solid #21262d;
+      background: #141414;
+      border: 1px solid #1e1e1e;
       border-radius: 8px;
       padding: 20px 24px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 16px;
-      background: #161b22;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .header h1 {
-      font-size: 16px;
-      font-weight: 700;
-      color: #e6edf3;
-      margin-bottom: 12px;
-    }
-
-    .status-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 24px;
-      font-size: 13px;
-    }
-
-    .status-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .status-label { color: #6b7280; }
-    .status-value { color: #c9d1d9; }
-
-    .dot {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #22c55e;
-      box-shadow: 0 0 6px #22c55e80;
-    }
-
-    .dot.warning { background: #eab308; box-shadow: 0 0 6px #eab30880; }
-    .dot.error { background: #ef4444; box-shadow: 0 0 6px #ef444480; }
-
-    .section {
-      border: 1px solid #21262d;
-      border-radius: 8px;
-      padding: 20px 24px;
-      margin-bottom: 16px;
-      background: #161b22;
-    }
-
-    .section-title {
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 600;
-      color: #6b7280;
+      color: #fafafa;
+      letter-spacing: -0.01em;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b98166;
+      flex-shrink: 0;
+    }
+    .status-dot.warning { background: #eab308; box-shadow: 0 0 8px #eab30866; }
+    .status-dot.error { background: #ef4444; box-shadow: 0 0 8px #ef444466; }
+
+    .uptime-badge {
+      font-size: 12px;
+      color: #737373;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ─── Stats Cards ───────────────────────────── */
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .stat-card {
+      text-align: center;
+      padding: 12px 8px;
+      background: #0a0a0a;
+      border: 1px solid #1e1e1e;
+      border-radius: 6px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fafafa;
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #737373;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      margin-bottom: 16px;
+      margin-top: 2px;
     }
 
-    .auth-form {
+    /* ─── Access (inline) ───────────────────────── */
+
+    .access-bar {
+      margin-bottom: 12px;
+    }
+
+    .login-row {
       display: flex;
       gap: 8px;
-      margin-bottom: 12px;
       align-items: center;
     }
 
-    .auth-form input {
+    .login-row input {
       flex: 1;
-      background: #0d1117;
-      border: 1px solid #30363d;
+      background: #141414;
+      border: 1px solid #1e1e1e;
       border-radius: 6px;
       padding: 8px 12px;
-      color: #c9d1d9;
-      font-family: inherit;
+      color: #fafafa;
+      font-family: 'Inter', sans-serif;
       font-size: 13px;
       outline: none;
+      transition: border-color 0.15s;
     }
 
-    .auth-form input:focus {
-      border-color: #58a6ff;
-      box-shadow: 0 0 0 2px #58a6ff30;
+    .login-row input:focus {
+      border-color: #10b981;
+      box-shadow: 0 0 0 2px #10b98120;
     }
 
-    .auth-form button, .btn {
-      background: #21262d;
-      border: 1px solid #30363d;
+    .login-row input::placeholder { color: #404040; }
+
+    .btn {
+      background: #1e1e1e;
+      border: 1px solid #2a2a2a;
       border-radius: 6px;
       padding: 8px 16px;
-      color: #c9d1d9;
-      font-family: inherit;
+      color: #fafafa;
+      font-family: 'Inter', sans-serif;
       font-size: 13px;
+      font-weight: 500;
       cursor: pointer;
       white-space: nowrap;
+      transition: background 0.15s, border-color 0.15s;
     }
 
-    .auth-form button:hover, .btn:hover {
-      background: #30363d;
-      border-color: #484f58;
-    }
+    .btn:hover { background: #2a2a2a; border-color: #333; }
 
     .btn-primary {
-      background: #238636;
-      border-color: #2ea043;
-      color: #ffffff;
+      background: #065f46;
+      border-color: #10b981;
+      color: #10b981;
     }
 
-    .btn-primary:hover {
-      background: #2ea043;
-      border-color: #3fb950;
-    }
+    .btn-primary:hover { background: #047857; }
 
-    .mode-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      margin-left: 8px;
-      vertical-align: middle;
-    }
-
-    .mode-badge.public { background: #1f2937; color: #6b7280; border: 1px solid #374151; }
-    .mode-badge.room { background: #0c2d1b; color: #3fb950; border: 1px solid #238636; }
-
-    .logout-btn {
-      font-size: 12px;
-      color: #f85149;
-      cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-      background: none;
-      border: none;
-      font-family: inherit;
-      padding: 0;
-      margin-left: 12px;
-    }
-
-    .logout-btn:hover { color: #ff7b72; }
-
-    .room {
-      margin-bottom: 16px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #21262d;
-    }
-
-    .room:last-child {
-      margin-bottom: 0;
-      padding-bottom: 0;
-      border-bottom: none;
-    }
-
-    .room-header {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 20px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-
-    .room-id {
-      color: #e6edf3;
-      font-weight: 600;
-    }
-
-    .room-meta { color: #6b7280; }
-
-    .peer {
+    .room-badge {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 2px 0 2px 16px;
+      gap: 10px;
+      padding: 6px 12px;
+      background: #141414;
+      border: 1px solid #1e1e1e;
+      border-radius: 6px;
       font-size: 13px;
     }
 
-    .peer-dot {
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
+    .room-badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #10b981;
+      flex-shrink: 0;
     }
 
-    .peer-dot.agent { background: #06b6d4; }
-    .peer-dot.human { background: #22c55e; }
-
-    .peer-name { color: #c9d1d9; }
-
-    .peer-type {
-      color: #6b7280;
+    .room-badge-name {
+      color: #fafafa;
+      font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
     }
 
-    .peer-type.agent { color: #06b6d4; }
-    .peer-type.human { color: #22c55e; }
-
-    .empty-state {
-      color: #6b7280;
-      font-style: italic;
-      font-size: 13px;
+    .room-badge-close {
+      background: none;
+      border: none;
+      color: #737373;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 0 0 4px;
+      line-height: 1;
+      font-family: 'Inter', sans-serif;
     }
 
-    .auth-msg {
-      color: #6b7280;
-      font-size: 13px;
-      padding: 8px 0;
-    }
+    .room-badge-close:hover { color: #ef4444; }
 
-    .auth-msg.error-msg { color: #f85149; }
+    /* ─── Room Card ──────────────────────────────── */
 
-    .footer {
-      border: 1px solid #21262d;
+    .card {
+      background: #141414;
+      border: 1px solid #1e1e1e;
       border-radius: 8px;
-      padding: 12px 24px;
-      background: #161b22;
+      padding: 20px 24px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #737373;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 14px;
+    }
+
+    .room-info {
       display: flex;
       flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 12px;
-      color: #6b7280;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 14px;
+      font-size: 13px;
     }
 
-    .refresh-on { color: #22c55e; }
+    .room-name {
+      font-weight: 600;
+      color: #fafafa;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .room-meta {
+      color: #737373;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    .peers-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .peer-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: #0a0a0a;
+      border: 1px solid #1e1e1e;
+      border-radius: 16px;
+      font-size: 12px;
+      color: #fafafa;
+    }
+
+    .peer-pill-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .peer-pill-dot.agent { background: #06b6d4; }
+    .peer-pill-dot.human { background: #10b981; }
+
+    .peer-pill-type {
+      color: #737373;
+      font-size: 11px;
+    }
+
+    .peer-pill-type.agent { color: #06b6d4; }
+    .peer-pill-type.human { color: #10b981; }
+
+    /* ─── Activity Feed ──────────────────────────── */
+
+    .activity-feed {
+      max-height: 440px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #1e1e1e transparent;
+    }
+
+    .activity-feed::-webkit-scrollbar { width: 4px; }
+    .activity-feed::-webkit-scrollbar-track { background: transparent; }
+    .activity-feed::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 2px; }
+
+    .activity-row {
+      display: grid;
+      grid-template-columns: 60px 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #1a1a1a;
+      font-size: 13px;
+      opacity: 1;
+      transition: opacity 0.3s, border-color 0.5s;
+    }
+
+    .activity-row:last-child { border-bottom: none; }
+
+    .activity-row.new-entry {
+      border-left: 2px solid #10b981;
+      padding-left: 8px;
+      animation: flash-green 1s ease-out;
+    }
+
+    @keyframes flash-green {
+      0% { background: #10b98115; border-left-color: #10b981; }
+      100% { background: transparent; border-left-color: transparent; }
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .activity-row.entering {
+      animation: fade-in 0.3s ease-out;
+    }
+
+    .activity-time {
+      color: #404040;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .activity-peer {
+      color: #fafafa;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .activity-action {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .activity-action.synced { color: #10b981; }
+    .activity-action.created { color: #3b82f6; }
+    .activity-action.deleted { color: #ef4444; }
+
+    .activity-file {
+      color: #737373;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+      direction: rtl;
+    }
+
+    .empty-activity {
+      color: #404040;
+      font-size: 13px;
+      text-align: center;
+      padding: 32px 0;
+    }
+
+    .public-msg {
+      color: #404040;
+      font-size: 13px;
+      text-align: center;
+      padding: 32px 0;
+    }
+
+    /* ─── Error Banner ───────────────────────────── */
 
     .error-banner {
       display: none;
-      background: #1c1214;
-      border: 1px solid #3d1f28;
+      background: #1a0a0a;
+      border: 1px solid #3d1f1f;
       border-radius: 8px;
-      padding: 12px 24px;
-      margin-bottom: 16px;
+      padding: 10px 16px;
+      margin-bottom: 12px;
       color: #ef4444;
       font-size: 13px;
     }
 
+    /* ─── Footer ─────────────────────────────────── */
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      font-size: 12px;
+      color: #404040;
+    }
+
+    .footer-refresh { color: #10b981; }
+
+    /* ─── Utilities ──────────────────────────────── */
+
     .hidden { display: none !important; }
 
-    @media (max-width: 480px) {
-      body { padding: 12px; font-size: 13px; }
-      .header, .section, .footer { padding: 16px; }
-      .status-row { gap: 4px 16px; }
-      .auth-form { flex-direction: column; }
+    /* ─── Responsive ─────────────────────────────── */
+
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .header, .card { padding: 16px; }
+      .login-row { flex-direction: column; }
+      .activity-row { grid-template-columns: 50px 1fr auto; }
+      .activity-file { display: none; }
+      .room-info { gap: 10px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- Header -->
     <div class="header">
-      <h1>mflow signaling server <span class="mode-badge public" id="mode-badge">PUBLIC</span></h1>
-      <div class="status-row">
-        <div class="status-item">
-          <span class="status-label">Status:</span>
-          <span class="dot" id="status-dot"></span>
-          <span class="status-value" id="status-text">Running</span>
+      <div class="header-top">
+        <div class="header-title">
+          <span class="status-dot" id="status-dot"></span>
+          <h1>mflow signaling</h1>
         </div>
-        <div class="status-item">
-          <span class="status-label">Uptime:</span>
-          <span class="status-value" id="uptime">--</span>
+        <span class="uptime-badge" id="uptime">--</span>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value" id="room-count">-</div>
+          <div class="stat-label">Rooms</div>
         </div>
-        <div class="status-item">
-          <span class="status-label">Rooms:</span>
-          <span class="status-value" id="room-count">--</span>
+        <div class="stat-card">
+          <div class="stat-value" id="peer-count">-</div>
+          <div class="stat-label">Peers</div>
         </div>
-        <div class="status-item">
-          <span class="status-label">Peers:</span>
-          <span class="status-value" id="peer-count">--</span>
+        <div class="stat-card">
+          <div class="stat-value" id="memory">-</div>
+          <div class="stat-label">Memory</div>
         </div>
-        <div class="status-item">
-          <span class="status-label">Memory:</span>
-          <span class="status-value" id="memory">--</span>
+        <div class="stat-card">
+          <div class="stat-value" id="status-text">OK</div>
+          <div class="stat-label">Status</div>
         </div>
       </div>
     </div>
 
+    <!-- Access (inline, not a card) -->
+    <div class="access-bar" id="access-bar">
+      <div class="login-row" id="login-row">
+        <input type="password" id="secret-input" placeholder="Room secret" autocomplete="off" aria-label="Room secret">
+        <button class="btn btn-primary" id="login-btn" type="button">Connect</button>
+      </div>
+      <div class="login-row hidden" id="room-badge-row">
+        <div class="room-badge" id="room-badge">
+          <span class="room-badge-dot"></span>
+          <span class="room-badge-name" id="room-badge-name">--</span>
+          <button class="room-badge-close" id="logout-btn" type="button" aria-label="Disconnect">&times;</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error -->
     <div class="error-banner" id="error-banner"></div>
 
-    <div class="section" id="auth-section">
-      <div class="section-title">Access <span id="auth-status"></span></div>
+    <!-- Room Card (visible when logged in) -->
+    <div class="card hidden" id="room-card">
+      <div id="rooms-container"></div>
+    </div>
 
-      <div id="login-forms">
-        <div id="room-login-form">
-          <div class="auth-form">
-            <input type="password" id="room-secret-input" placeholder="Enter room secret to view your room" autocomplete="off" aria-label="Room secret">
-            <button class="btn btn-primary" id="room-login-btn" type="button">View Room</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="logged-in-info" class="hidden">
-        <div class="auth-msg" id="logged-in-msg"></div>
-        <button class="logout-btn" id="logout-btn" type="button">Logout</button>
+    <!-- Activity Feed (visible when logged in) -->
+    <div class="card hidden" id="activity-card">
+      <div class="card-title">Activity</div>
+      <div class="activity-feed" id="activity-feed">
+        <div class="empty-activity">Waiting for activity...</div>
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Active Rooms</div>
-      <div id="rooms-container">
-        <div class="empty-state">Loading...</div>
-      </div>
+    <!-- Public message (visible when not logged in) -->
+    <div class="card" id="public-card">
+      <div class="public-msg">Enter a room secret to view peers and activity</div>
     </div>
 
+    <!-- Footer -->
     <div class="footer">
-      <span>Last updated: <span id="last-updated">--</span></span>
-      <span>Auto-refresh: <span class="refresh-on">ON</span></span>
+      <span>Updated <span id="last-updated">--</span></span>
+      <span>Auto-refresh: <span class="footer-refresh">ON</span> (2s)</span>
     </div>
   </div>
 
@@ -347,124 +498,124 @@ export function getDashboardHtml(): string {
     (function() {
       var lastFetch = 0;
       var consecutiveErrors = 0;
-
-      // Mode: 'public' | 'room'
       var mode = 'public';
-      var secretHash = null;  // SHA-256 hash of room secret (for room mode)
+      var secretHash = null;
+      var knownActivityIds = {};
+      var activityCount = 0;
 
-      // ─── Crypto ──────────────────────────────────────────
+      // ─── Crypto ─────────────────────────────────────
 
       function sha256(str) {
-        var encoder = new TextEncoder();
-        return crypto.subtle.digest('SHA-256', encoder.encode(str)).then(function(buf) {
+        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function(buf) {
           var arr = new Uint8Array(buf);
           var hex = '';
-          for (var i = 0; i < arr.length; i++) {
-            hex += ('0' + arr[i].toString(16)).slice(-2);
-          }
+          for (var i = 0; i < arr.length; i++) hex += ('0' + arr[i].toString(16)).slice(-2);
           return hex;
         });
       }
 
-      // ─── Session Storage ─────────────────────────────────
+      // ─── Session ────────────────────────────────────
 
       function loadSession() {
         try {
-          var stored = sessionStorage.getItem('mflow_dash_mode');
-          if (stored) {
-            var s = JSON.parse(stored);
-            if (s.mode === 'room' && s.secretHash) {
-              mode = 'room';
-              secretHash = s.secretHash;
-            }
-          }
+          var s = JSON.parse(sessionStorage.getItem('mflow_dash') || '{}');
+          if (s.mode === 'room' && s.hash) { mode = 'room'; secretHash = s.hash; }
         } catch (_) {}
       }
 
       function saveSession() {
         try {
-          if (mode === 'room') {
-            sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'room', secretHash: secretHash }));
-          } else {
-            sessionStorage.removeItem('mflow_dash_mode');
-          }
+          if (mode === 'room') sessionStorage.setItem('mflow_dash', JSON.stringify({ mode: 'room', hash: secretHash }));
+          else sessionStorage.removeItem('mflow_dash');
         } catch (_) {}
       }
 
-      // ─── UI Helpers ──────────────────────────────────────
+      // ─── Formatting ─────────────────────────────────
 
-      function formatUptime(seconds) {
-        if (seconds < 60) return seconds + 's';
-        if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's';
-        var h = Math.floor(seconds / 3600);
-        var m = Math.floor((seconds % 3600) / 60);
+      function formatUptime(sec) {
+        if (sec < 60) return sec + 's';
+        if (sec < 3600) return Math.floor(sec / 60) + 'm';
+        var h = Math.floor(sec / 3600);
+        var m = Math.floor((sec % 3600) / 60);
         return h + 'h ' + m + 'm';
       }
 
-      function formatAge(createdAt) {
-        var diff = Math.floor((Date.now() - createdAt) / 1000);
-        if (diff < 60) return diff + 's';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm';
+      function formatAge(ts) {
+        var diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
         var h = Math.floor(diff / 3600);
-        var m = Math.floor((diff % 3600) / 60);
-        return h + 'h ' + m + 'm';
+        return h + 'h ago';
       }
 
-      function escapeHtml(str) {
-        var div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+      function relativeTime(ts) {
+        var diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        return Math.floor(diff / 3600) + 'h ago';
       }
 
-      function updateModeUI() {
-        var badge = document.getElementById('mode-badge');
-        var loginForms = document.getElementById('login-forms');
-        var loggedInInfo = document.getElementById('logged-in-info');
-        var loggedInMsg = document.getElementById('logged-in-msg');
+      function esc(str) {
+        var d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+      }
 
-        badge.className = 'mode-badge ' + mode;
-        badge.textContent = mode.toUpperCase();
+      // ─── UI State ───────────────────────────────────
 
-        if (mode === 'public') {
-          loginForms.classList.remove('hidden');
-          loggedInInfo.classList.add('hidden');
+      function updateUI() {
+        var loginRow = document.getElementById('login-row');
+        var badgeRow = document.getElementById('room-badge-row');
+        var roomCard = document.getElementById('room-card');
+        var activityCard = document.getElementById('activity-card');
+        var publicCard = document.getElementById('public-card');
+
+        if (mode === 'room') {
+          loginRow.classList.add('hidden');
+          badgeRow.classList.remove('hidden');
+          roomCard.classList.remove('hidden');
+          activityCard.classList.remove('hidden');
+          publicCard.classList.add('hidden');
         } else {
-          loginForms.classList.add('hidden');
-          loggedInInfo.classList.remove('hidden');
-          loggedInMsg.textContent = 'Viewing rooms matching your secret';
+          loginRow.classList.remove('hidden');
+          badgeRow.classList.add('hidden');
+          roomCard.classList.add('hidden');
+          activityCard.classList.add('hidden');
+          publicCard.classList.remove('hidden');
         }
       }
+
+      // ─── Render Room ────────────────────────────────
 
       function renderRooms(data) {
         var container = document.getElementById('rooms-container');
 
-        if (mode === 'public') {
-          container.innerHTML = '<div class="auth-msg">Enter a room secret to view room details.</div>';
-          return;
-        }
-
         if (!data.rooms || data.rooms.length === 0) {
-          container.innerHTML = '<div class="empty-state">No active room with this secret</div>';
+          container.innerHTML = '<div class="empty-activity">No active room</div>';
           return;
         }
 
         var html = '';
         for (var i = 0; i < data.rooms.length; i++) {
           var room = data.rooms[i];
-          html += '<div class="room">';
-          html += '<div class="room-header">';
-          html += '<span class="room-id">Room: ' + escapeHtml(room.id.substring(0, 8)) + '</span>';
-          html += '<span class="room-meta">Peers: ' + room.peerCount + '</span>';
+
+          // Room badge name
+          document.getElementById('room-badge-name').textContent = room.id.substring(0, 8);
+
+          html += '<div class="room-info">';
+          html += '<span class="room-name">Room: ' + esc(room.id.substring(0, 8)) + '</span>';
           html += '<span class="room-meta">Age: ' + formatAge(room.createdAt) + '</span>';
+          html += '<span class="room-meta">Peers: ' + room.peerCount + '</span>';
           html += '</div>';
+          html += '<div class="peers-row">';
 
           for (var j = 0; j < room.peers.length; j++) {
-            var peer = room.peers[j];
-            var typeClass = peer.peerType === 'agent' ? 'agent' : 'human';
-            html += '<div class="peer">';
-            html += '<span class="peer-dot ' + typeClass + '"></span>';
-            html += '<span class="peer-name">' + escapeHtml(peer.peerName) + '</span>';
-            html += '<span class="peer-type ' + typeClass + '">(' + escapeHtml(peer.peerType) + ')</span>';
+            var p = room.peers[j];
+            var tc = p.peerType === 'agent' ? 'agent' : 'human';
+            html += '<div class="peer-pill">';
+            html += '<span class="peer-pill-dot ' + tc + '"></span>';
+            html += '<span class="peer-pill-type ' + tc + '">[' + esc(p.peerType) + ']</span> ';
+            html += esc(p.peerName);
             html += '</div>';
           }
 
@@ -474,17 +625,64 @@ export function getDashboardHtml(): string {
         container.innerHTML = html;
       }
 
-      // ─── Fetch Logic ─────────────────────────────────────
+      // ─── Render Activity ────────────────────────────
 
-      function buildApiUrl() {
-        if (mode === 'room' && secretHash) {
-          return '/api/rooms?secretHash=' + encodeURIComponent(secretHash);
+      function renderActivity(data) {
+        var feed = document.getElementById('activity-feed');
+
+        // Collect all activity entries from all rooms
+        var entries = [];
+        if (data.rooms) {
+          for (var i = 0; i < data.rooms.length; i++) {
+            var act = data.rooms[i].activity;
+            if (act) {
+              for (var j = 0; j < act.length; j++) entries.push(act[j]);
+            }
+          }
         }
+
+        if (entries.length === 0) {
+          feed.innerHTML = '<div class="empty-activity">Waiting for activity...</div>';
+          return;
+        }
+
+        // Sort newest first
+        entries.sort(function(a, b) { return b.timestamp - a.timestamp; });
+
+        // Cap at 20
+        if (entries.length > 20) entries = entries.slice(0, 20);
+
+        var html = '';
+        for (var k = 0; k < entries.length; k++) {
+          var e = entries[k];
+          var entryId = e.timestamp + ':' + e.peerId + ':' + e.file;
+          var isNew = !knownActivityIds[entryId];
+          if (isNew) knownActivityIds[entryId] = true;
+
+          var cls = 'activity-row';
+          if (isNew && activityCount > 0) cls += ' new-entry entering';
+
+          html += '<div class="' + cls + '">';
+          html += '<span class="activity-time">' + relativeTime(e.timestamp) + '</span>';
+          html += '<span class="activity-peer">' + esc(e.peerName) + '</span>';
+          html += '<span class="activity-action ' + esc(e.action) + '">' + esc(e.action) + '</span>';
+          html += '<span class="activity-file" title="' + esc(e.file) + '">' + esc(e.file) + '</span>';
+          html += '</div>';
+        }
+
+        feed.innerHTML = html;
+        activityCount++;
+      }
+
+      // ─── Fetch ──────────────────────────────────────
+
+      function buildUrl() {
+        if (mode === 'room' && secretHash) return '/api/rooms?secretHash=' + encodeURIComponent(secretHash);
         return '/api/rooms';
       }
 
-      function updateDashboard() {
-        fetch(buildApiUrl())
+      function refresh() {
+        fetch(buildUrl())
           .then(function(res) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.json();
@@ -493,69 +691,80 @@ export function getDashboardHtml(): string {
             consecutiveErrors = 0;
             lastFetch = Date.now();
 
-            document.getElementById('status-dot').className = 'dot';
-            document.getElementById('status-text').textContent = 'Running';
+            var dot = document.getElementById('status-dot');
+            dot.className = 'status-dot';
+            document.getElementById('status-text').textContent = 'OK';
             document.getElementById('uptime').textContent = formatUptime(data.uptime);
             document.getElementById('room-count').textContent = data.totalRooms;
             document.getElementById('peer-count').textContent = data.totalPeers;
             document.getElementById('memory').textContent = (data.memoryMB || 0) + 'MB';
-
             document.getElementById('error-banner').style.display = 'none';
 
-            renderRooms(data);
+            if (mode === 'room') {
+              renderRooms(data);
+              renderActivity(data);
+            }
           })
           .catch(function(err) {
             consecutiveErrors++;
-            document.getElementById('status-dot').className = consecutiveErrors >= 3 ? 'dot error' : 'dot warning';
-            document.getElementById('status-text').textContent = consecutiveErrors >= 3 ? 'Unreachable' : 'Retrying...';
+            var dot = document.getElementById('status-dot');
+            dot.className = 'status-dot ' + (consecutiveErrors >= 3 ? 'error' : 'warning');
+            document.getElementById('status-text').textContent = consecutiveErrors >= 3 ? 'ERR' : '...';
 
             var banner = document.getElementById('error-banner');
-            banner.textContent = 'Failed to fetch: ' + err.message;
+            banner.textContent = err.message;
             banner.style.display = 'block';
           });
       }
 
-      function updateTimestamp() {
+      function updateTimestamps() {
         if (lastFetch === 0) return;
-        var ago = Math.floor((Date.now() - lastFetch) / 1000);
-        document.getElementById('last-updated').textContent = ago + 's ago';
+        document.getElementById('last-updated').textContent = Math.floor((Date.now() - lastFetch) / 1000) + 's ago';
+
+        // Update relative times in activity feed
+        var times = document.querySelectorAll('.activity-time');
+        // Not worth re-rendering; times update on next poll
       }
 
-      // ─── Event Handlers ──────────────────────────────────
+      // ─── Events ─────────────────────────────────────
 
-      document.getElementById('room-login-btn').addEventListener('click', function() {
-        var input = document.getElementById('room-secret-input');
-        var secret = input.value.trim();
-        if (!secret) return;
-        sha256(secret).then(function(hash) {
+      document.getElementById('login-btn').addEventListener('click', function() {
+        var val = document.getElementById('secret-input').value.trim();
+        if (!val) return;
+        sha256(val).then(function(hash) {
           mode = 'room';
           secretHash = hash;
+          knownActivityIds = {};
+          activityCount = 0;
           saveSession();
-          updateModeUI();
-          updateDashboard();
+          updateUI();
+          refresh();
         });
       });
 
-      document.getElementById('room-secret-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') document.getElementById('room-login-btn').click();
+      document.getElementById('secret-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('login-btn').click();
       });
 
       document.getElementById('logout-btn').addEventListener('click', function() {
         mode = 'public';
         secretHash = null;
+        knownActivityIds = {};
+        activityCount = 0;
         saveSession();
-        updateModeUI();
-        document.getElementById('room-secret-input').value = '';
-        updateDashboard();
+        updateUI();
+        document.getElementById('secret-input').value = '';
+        document.getElementById('room-badge-name').textContent = '--';
+        refresh();
       });
 
-      // ─── Init ────────────────────────────────────────────
+      // ─── Init ───────────────────────────────────────
 
       loadSession();
-      updateModeUI();
-      updateDashboard();
-      setInterval(updateDashboard, 2000);
-      setInterval(updateTimestamp, 1000);
+      updateUI();
+      refresh();
+      setInterval(refresh, 2000);
+      setInterval(updateTimestamps, 1000);
     })();
   </script>
 </body>

@@ -1,6 +1,11 @@
 import type { ServerWebSocket } from "bun";
-import type { PeerInfo, SignalingErrorCode } from "@mflow/shared";
+import type { PeerInfo, SignalingErrorCode, ActivityEntry } from "@mflow/shared";
+import type { ActivityAction } from "@mflow/shared";
 import { MAX_PEERS_PER_ROOM } from "@mflow/shared";
+
+// ─── Constants ──────────────────────────────────────────────
+
+const MAX_ACTIVITY_ENTRIES = 50;
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -9,6 +14,7 @@ export interface Room {
   secretHash: string;
   peers: Map<string, ServerWebSocket<PeerContext>>;
   createdAt: number;
+  activity: ActivityEntry[];
 }
 
 export interface PeerContext {
@@ -77,6 +83,7 @@ export class RoomManager {
         secretHash,
         peers: new Map(),
         createdAt: Date.now(),
+        activity: [],
       };
       this.rooms.set(roomId, room);
     }
@@ -172,8 +179,8 @@ export class RoomManager {
   /**
    * Get room details filtered by secretHash. Returns only rooms matching the hash.
    */
-  getRoomDetailsBySecretHash(secretHash: string): Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[] }> {
-    const details: Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[] }> = [];
+  getRoomDetailsBySecretHash(secretHash: string): Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[]; activity: ActivityEntry[] }> {
+    const details: Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[]; activity: ActivityEntry[] }> = [];
     for (const room of this.rooms.values()) {
       if (room.secretHash !== secretHash) continue;
       const peers: PeerInfo[] = [];
@@ -191,8 +198,21 @@ export class RoomManager {
         peerCount: room.peers.size,
         createdAt: room.createdAt,
         peers,
+        activity: room.activity,
       });
     }
     return details;
+  }
+
+  /**
+   * Add an activity entry to a room. Ring buffer capped at MAX_ACTIVITY_ENTRIES.
+   */
+  addActivity(roomId: string, entry: ActivityEntry): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    room.activity.push(entry);
+    if (room.activity.length > MAX_ACTIVITY_ENTRIES) {
+      room.activity.shift();
+    }
   }
 }

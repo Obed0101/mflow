@@ -3,12 +3,13 @@ import {
   SignalingJoinSchema,
   SignalingSignalSchema,
   SignalingRelaySchema,
+  SignalingActivitySchema,
   UNAUTHENTICATED_TIMEOUT_MS,
   MAX_UNAUTHENTICATED_PER_IP,
   MAX_UNAUTHENTICATED_GLOBAL,
   WS_MAX_PAYLOAD_BYTES,
 } from "@mflow/shared";
-import type { HealthResponse } from "@mflow/shared";
+import type { HealthResponse, ActivityEntry } from "@mflow/shared";
 import { RoomManager, type PeerContext } from "./rooms.js";
 import { RateLimiter } from "./ratelimit.js";
 import { relaySignal, relayData } from "./relay.js";
@@ -133,6 +134,9 @@ function handleMessage(
     case "relay":
       handleRelay(ws, data);
       break;
+    case "activity":
+      handleActivity(ws, data);
+      break;
     default:
       sendError(ws, "INVALID_MESSAGE", `Unknown message type: ${msgType}`);
   }
@@ -237,6 +241,30 @@ function handleRelay(ws: ServerWebSocket<PeerContext>, data: unknown): void {
   if (!result.ok) {
     sendError(ws, result.code, result.message);
   }
+}
+
+// ─── Activity Handler ───────────────────────────────────────
+
+function handleActivity(ws: ServerWebSocket<PeerContext>, data: unknown): void {
+  const parsed = SignalingActivitySchema.safeParse(data);
+  if (!parsed.success) {
+    sendError(ws, "INVALID_MESSAGE", `Invalid activity message: ${parsed.error.message}`);
+    return;
+  }
+
+  const { roomId, peerId, peerName, peerType } = ws.data;
+  if (!roomId) return; // Must be in a room
+
+  const entry: ActivityEntry = {
+    timestamp: Date.now(),
+    peerId,
+    peerName,
+    peerType,
+    action: parsed.data.action,
+    file: parsed.data.file,
+  };
+
+  rooms.addActivity(roomId, entry);
 }
 
 // ─── Peer Left Notification ─────────────────────────────────
