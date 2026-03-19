@@ -472,12 +472,6 @@ function getDashboardHtml(): string {
     }
     .mode-badge.public { background: #1f2937; color: #6b7280; border: 1px solid #374151; }
     .mode-badge.room { background: #0c2d1b; color: #3fb950; border: 1px solid #238636; }
-    .mode-badge.admin { background: #2d1b0c; color: #d29922; border: 1px solid #9e6a03; }
-    .auth-toggle {
-      font-size: 12px; color: #6b7280; cursor: pointer; text-decoration: underline;
-      text-underline-offset: 2px; background: none; border: none; font-family: inherit; padding: 0;
-    }
-    .auth-toggle:hover { color: #c9d1d9; }
     .logout-btn {
       font-size: 12px; color: #f85149; cursor: pointer; text-decoration: underline;
       text-underline-offset: 2px; background: none; border: none; font-family: inherit; padding: 0; margin-left: 12px;
@@ -555,15 +549,6 @@ function getDashboardHtml(): string {
             <button class="btn btn-primary" id="room-login-btn" type="button">View Room</button>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:16px;margin-top:4px;">
-          <button class="auth-toggle" id="toggle-admin" type="button">Admin login</button>
-        </div>
-        <div id="admin-login-form" class="hidden" style="margin-top:12px;">
-          <div class="auth-form">
-            <input type="password" id="admin-token-input" placeholder="Enter admin token" autocomplete="off" aria-label="Admin token">
-            <button class="btn btn-primary" id="admin-login-btn" type="button">Admin Login</button>
-          </div>
-        </div>
       </div>
       <div id="logged-in-info" class="hidden">
         <div class="auth-msg" id="logged-in-msg"></div>
@@ -585,7 +570,6 @@ function getDashboardHtml(): string {
       var consecutiveErrors = 0;
       var mode = 'public';
       var secretHash = null;
-      var adminToken = null;
 
       function sha256(str) {
         var encoder = new TextEncoder();
@@ -605,7 +589,6 @@ function getDashboardHtml(): string {
           if (stored) {
             var s = JSON.parse(stored);
             if (s.mode === 'room' && s.secretHash) { mode = 'room'; secretHash = s.secretHash; }
-            else if (s.mode === 'admin' && s.adminToken) { mode = 'admin'; adminToken = s.adminToken; }
           }
         } catch (_) {}
       }
@@ -613,7 +596,6 @@ function getDashboardHtml(): string {
       function saveSession() {
         try {
           if (mode === 'room') sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'room', secretHash: secretHash }));
-          else if (mode === 'admin') sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'admin', adminToken: adminToken }));
           else sessionStorage.removeItem('mflow_dash_mode');
         } catch (_) {}
       }
@@ -652,18 +634,18 @@ function getDashboardHtml(): string {
         } else {
           loginForms.classList.add('hidden');
           loggedInInfo.classList.remove('hidden');
-          loggedInMsg.textContent = mode === 'room' ? 'Viewing rooms matching your secret' : 'Admin mode — viewing all rooms';
+          loggedInMsg.textContent = 'Viewing rooms matching your secret';
         }
       }
 
       function renderRooms(data) {
         var container = document.getElementById('rooms-container');
         if (mode === 'public') {
-          container.innerHTML = '<div class="auth-msg">Enter a room secret or admin token to view room details.</div>';
+          container.innerHTML = '<div class="auth-msg">Enter a room secret to view room details.</div>';
           return;
         }
         if (!data.rooms || data.rooms.length === 0) {
-          container.innerHTML = '<div class="empty-state">' + (mode === 'room' ? 'No active room with this secret' : 'No rooms active') + '</div>';
+          container.innerHTML = '<div class="empty-state">No active room with this secret</div>';
           return;
         }
         var html = '';
@@ -686,7 +668,6 @@ function getDashboardHtml(): string {
       }
 
       function buildApiUrl() {
-        if (mode === 'admin' && adminToken) return '/api/rooms?admin=' + encodeURIComponent(adminToken);
         if (mode === 'room' && secretHash) return '/api/rooms?secretHash=' + encodeURIComponent(secretHash);
         return '/api/rooms';
       }
@@ -694,16 +675,10 @@ function getDashboardHtml(): string {
       function updateDashboard() {
         fetch(buildApiUrl())
           .then(function(res) {
-            if (res.status === 403) {
-              mode = 'public'; adminToken = null; saveSession(); updateModeUI();
-              document.getElementById('rooms-container').innerHTML = '<div class="auth-msg error-msg">Invalid admin token. Logged out.</div>';
-              return null;
-            }
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.json();
           })
           .then(function(data) {
-            if (!data) return;
             consecutiveErrors = 0; lastFetch = Date.now();
             document.getElementById('status-dot').className = 'dot';
             document.getElementById('status-text').textContent = 'Running';
@@ -733,29 +708,16 @@ function getDashboardHtml(): string {
         var secret = document.getElementById('room-secret-input').value.trim();
         if (!secret) return;
         sha256(secret).then(function(hash) {
-          mode = 'room'; secretHash = hash; adminToken = null;
+          mode = 'room'; secretHash = hash;
           saveSession(); updateModeUI(); updateDashboard();
         });
       });
       document.getElementById('room-secret-input').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') document.getElementById('room-login-btn').click();
       });
-      document.getElementById('toggle-admin').addEventListener('click', function() {
-        document.getElementById('admin-login-form').classList.toggle('hidden');
-      });
-      document.getElementById('admin-login-btn').addEventListener('click', function() {
-        var token = document.getElementById('admin-token-input').value.trim();
-        if (!token) return;
-        mode = 'admin'; adminToken = token; secretHash = null;
-        saveSession(); updateModeUI(); updateDashboard();
-      });
-      document.getElementById('admin-token-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') document.getElementById('admin-login-btn').click();
-      });
       document.getElementById('logout-btn').addEventListener('click', function() {
-        mode = 'public'; secretHash = null; adminToken = null; saveSession(); updateModeUI();
+        mode = 'public'; secretHash = null; saveSession(); updateModeUI();
         document.getElementById('room-secret-input').value = '';
-        document.getElementById('admin-token-input').value = '';
         updateDashboard();
       });
 
@@ -798,26 +760,8 @@ Deno.serve({ port: PORT }, (req, info) => {
 
   // Rooms API — scoped by auth level
   if (url.pathname === "/api/rooms" && req.method === "GET") {
-    const adminTokenParam = url.searchParams.get("admin");
     const secretHashParam = url.searchParams.get("secretHash");
     const uptime = Math.floor((Date.now() - startTime) / 1000);
-
-    // Admin mode: return all rooms if token matches
-    if (adminTokenParam) {
-      const envToken = Deno.env.get("ADMIN_TOKEN");
-      if (!envToken || adminTokenParam !== envToken) {
-        return Response.json({ error: "Invalid admin token" }, { status: 403 });
-      }
-      let totalPeers = 0;
-      for (const room of rooms.values()) totalPeers += room.peers.size;
-      return Response.json({
-        rooms: getRoomDetails(),
-        totalRooms: rooms.size,
-        totalPeers,
-        uptime,
-        memoryMB: 0,
-      });
-    }
 
     // Room-scoped: return only rooms matching secretHash
     if (secretHashParam) {

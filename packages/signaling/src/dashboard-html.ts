@@ -2,10 +2,9 @@
  * Dashboard HTML template for the mflow signaling server.
  * Pure HTML + CSS + vanilla JS — no frameworks, no build step.
  *
- * Three modes:
+ * Two modes:
  * - Public (default): aggregate stats only, no room IDs or peer names
  * - Room-scoped: enter room secret, client-side SHA-256 hash, show only matching rooms
- * - Admin: enter admin token, server validates against ADMIN_TOKEN env var, show all rooms
  */
 
 export function getDashboardHtml(): string {
@@ -161,21 +160,6 @@ export function getDashboardHtml(): string {
 
     .mode-badge.public { background: #1f2937; color: #6b7280; border: 1px solid #374151; }
     .mode-badge.room { background: #0c2d1b; color: #3fb950; border: 1px solid #238636; }
-    .mode-badge.admin { background: #2d1b0c; color: #d29922; border: 1px solid #9e6a03; }
-
-    .auth-toggle {
-      font-size: 12px;
-      color: #6b7280;
-      cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-      background: none;
-      border: none;
-      font-family: inherit;
-      padding: 0;
-    }
-
-    .auth-toggle:hover { color: #c9d1d9; }
 
     .logout-btn {
       font-size: 12px;
@@ -338,15 +322,6 @@ export function getDashboardHtml(): string {
             <button class="btn btn-primary" id="room-login-btn" type="button">View Room</button>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:16px;margin-top:4px;">
-          <button class="auth-toggle" id="toggle-admin" type="button">Admin login</button>
-        </div>
-        <div id="admin-login-form" class="hidden" style="margin-top:12px;">
-          <div class="auth-form">
-            <input type="password" id="admin-token-input" placeholder="Enter admin token" autocomplete="off" aria-label="Admin token">
-            <button class="btn btn-primary" id="admin-login-btn" type="button">Admin Login</button>
-          </div>
-        </div>
       </div>
 
       <div id="logged-in-info" class="hidden">
@@ -373,10 +348,9 @@ export function getDashboardHtml(): string {
       var lastFetch = 0;
       var consecutiveErrors = 0;
 
-      // Mode: 'public' | 'room' | 'admin'
+      // Mode: 'public' | 'room'
       var mode = 'public';
       var secretHash = null;  // SHA-256 hash of room secret (for room mode)
-      var adminToken = null;  // Admin token (for admin mode)
 
       // ─── Crypto ──────────────────────────────────────────
 
@@ -402,9 +376,6 @@ export function getDashboardHtml(): string {
             if (s.mode === 'room' && s.secretHash) {
               mode = 'room';
               secretHash = s.secretHash;
-            } else if (s.mode === 'admin' && s.adminToken) {
-              mode = 'admin';
-              adminToken = s.adminToken;
             }
           }
         } catch (_) {}
@@ -414,8 +385,6 @@ export function getDashboardHtml(): string {
         try {
           if (mode === 'room') {
             sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'room', secretHash: secretHash }));
-          } else if (mode === 'admin') {
-            sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'admin', adminToken: adminToken }));
           } else {
             sessionStorage.removeItem('mflow_dash_mode');
           }
@@ -462,11 +431,7 @@ export function getDashboardHtml(): string {
         } else {
           loginForms.classList.add('hidden');
           loggedInInfo.classList.remove('hidden');
-          if (mode === 'room') {
-            loggedInMsg.textContent = 'Viewing rooms matching your secret';
-          } else {
-            loggedInMsg.textContent = 'Admin mode — viewing all rooms';
-          }
+          loggedInMsg.textContent = 'Viewing rooms matching your secret';
         }
       }
 
@@ -474,16 +439,12 @@ export function getDashboardHtml(): string {
         var container = document.getElementById('rooms-container');
 
         if (mode === 'public') {
-          container.innerHTML = '<div class="auth-msg">Enter a room secret or admin token to view room details.</div>';
+          container.innerHTML = '<div class="auth-msg">Enter a room secret to view room details.</div>';
           return;
         }
 
         if (!data.rooms || data.rooms.length === 0) {
-          if (mode === 'room') {
-            container.innerHTML = '<div class="empty-state">No active room with this secret</div>';
-          } else {
-            container.innerHTML = '<div class="empty-state">No rooms active</div>';
-          }
+          container.innerHTML = '<div class="empty-state">No active room with this secret</div>';
           return;
         }
 
@@ -516,9 +477,6 @@ export function getDashboardHtml(): string {
       // ─── Fetch Logic ─────────────────────────────────────
 
       function buildApiUrl() {
-        if (mode === 'admin' && adminToken) {
-          return '/api/rooms?admin=' + encodeURIComponent(adminToken);
-        }
         if (mode === 'room' && secretHash) {
           return '/api/rooms?secretHash=' + encodeURIComponent(secretHash);
         }
@@ -528,21 +486,10 @@ export function getDashboardHtml(): string {
       function updateDashboard() {
         fetch(buildApiUrl())
           .then(function(res) {
-            if (res.status === 403) {
-              // Admin token invalid — logout
-              mode = 'public';
-              adminToken = null;
-              saveSession();
-              updateModeUI();
-              var container = document.getElementById('rooms-container');
-              container.innerHTML = '<div class="auth-msg error-msg">Invalid admin token. Logged out.</div>';
-              return null;
-            }
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.json();
           })
           .then(function(data) {
-            if (!data) return;
             consecutiveErrors = 0;
             lastFetch = Date.now();
 
@@ -583,7 +530,6 @@ export function getDashboardHtml(): string {
         sha256(secret).then(function(hash) {
           mode = 'room';
           secretHash = hash;
-          adminToken = null;
           saveSession();
           updateModeUI();
           updateDashboard();
@@ -594,34 +540,12 @@ export function getDashboardHtml(): string {
         if (e.key === 'Enter') document.getElementById('room-login-btn').click();
       });
 
-      document.getElementById('toggle-admin').addEventListener('click', function() {
-        document.getElementById('admin-login-form').classList.toggle('hidden');
-      });
-
-      document.getElementById('admin-login-btn').addEventListener('click', function() {
-        var input = document.getElementById('admin-token-input');
-        var token = input.value.trim();
-        if (!token) return;
-        mode = 'admin';
-        adminToken = token;
-        secretHash = null;
-        saveSession();
-        updateModeUI();
-        updateDashboard();
-      });
-
-      document.getElementById('admin-token-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') document.getElementById('admin-login-btn').click();
-      });
-
       document.getElementById('logout-btn').addEventListener('click', function() {
         mode = 'public';
         secretHash = null;
-        adminToken = null;
         saveSession();
         updateModeUI();
         document.getElementById('room-secret-input').value = '';
-        document.getElementById('admin-token-input').value = '';
         updateDashboard();
       });
 
