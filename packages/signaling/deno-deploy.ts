@@ -395,6 +395,21 @@ function getRoomDetails(): Array<{ id: string; peerCount: number; createdAt: num
   return details;
 }
 
+function getRoomDetailsBySecretHash(hash: string): Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[] }> {
+  const details: Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[] }> = [];
+  for (const room of rooms.values()) {
+    if (room.secretHash !== hash) continue;
+    const peers: PeerInfo[] = Array.from(room.peers.values()).map((p) => p.info);
+    details.push({
+      id: room.id,
+      peerCount: room.peers.size,
+      createdAt: room.createdAt,
+      peers,
+    });
+  }
+  return details;
+}
+
 // ─── Dashboard HTML ──────────────────────────────────────────
 
 function getDashboardHtml(): string {
@@ -438,6 +453,36 @@ function getDashboardHtml(): string {
       font-size: 13px; font-weight: 600; color: #6b7280;
       text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;
     }
+    .auth-form { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+    .auth-form input {
+      flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+      padding: 8px 12px; color: #c9d1d9; font-family: inherit; font-size: 13px; outline: none;
+    }
+    .auth-form input:focus { border-color: #58a6ff; box-shadow: 0 0 0 2px #58a6ff30; }
+    .auth-form button, .btn {
+      background: #21262d; border: 1px solid #30363d; border-radius: 6px;
+      padding: 8px 16px; color: #c9d1d9; font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
+    }
+    .auth-form button:hover, .btn:hover { background: #30363d; border-color: #484f58; }
+    .btn-primary { background: #238636; border-color: #2ea043; color: #ffffff; }
+    .btn-primary:hover { background: #2ea043; border-color: #3fb950; }
+    .mode-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 12px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.02em; margin-left: 8px; vertical-align: middle;
+    }
+    .mode-badge.public { background: #1f2937; color: #6b7280; border: 1px solid #374151; }
+    .mode-badge.room { background: #0c2d1b; color: #3fb950; border: 1px solid #238636; }
+    .mode-badge.admin { background: #2d1b0c; color: #d29922; border: 1px solid #9e6a03; }
+    .auth-toggle {
+      font-size: 12px; color: #6b7280; cursor: pointer; text-decoration: underline;
+      text-underline-offset: 2px; background: none; border: none; font-family: inherit; padding: 0;
+    }
+    .auth-toggle:hover { color: #c9d1d9; }
+    .logout-btn {
+      font-size: 12px; color: #f85149; cursor: pointer; text-decoration: underline;
+      text-underline-offset: 2px; background: none; border: none; font-family: inherit; padding: 0; margin-left: 12px;
+    }
+    .logout-btn:hover { color: #ff7b72; }
     .room { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #21262d; }
     .room:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
     .room-header { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 8px; font-size: 13px; }
@@ -452,6 +497,8 @@ function getDashboardHtml(): string {
     .peer-type.agent { color: #06b6d4; }
     .peer-type.human { color: #22c55e; }
     .empty-state { color: #6b7280; font-style: italic; font-size: 13px; }
+    .auth-msg { color: #6b7280; font-size: 13px; padding: 8px 0; }
+    .auth-msg.error-msg { color: #f85149; }
     .footer {
       border: 1px solid #21262d; border-radius: 8px; padding: 12px 24px; background: #161b22;
       display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 12px; color: #6b7280;
@@ -461,17 +508,19 @@ function getDashboardHtml(): string {
       display: none; background: #1c1214; border: 1px solid #3d1f28; border-radius: 8px;
       padding: 12px 24px; margin-bottom: 16px; color: #ef4444; font-size: 13px;
     }
+    .hidden { display: none !important; }
     @media (max-width: 480px) {
       body { padding: 12px; font-size: 13px; }
       .header, .section, .footer { padding: 16px; }
       .status-row { gap: 4px 16px; }
+      .auth-form { flex-direction: column; }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>mflow signaling server</h1>
+      <h1>mflow signaling server <span class="mode-badge public" id="mode-badge">PUBLIC</span></h1>
       <div class="status-row">
         <div class="status-item">
           <span class="status-label">Status:</span>
@@ -497,6 +546,30 @@ function getDashboardHtml(): string {
       </div>
     </div>
     <div class="error-banner" id="error-banner"></div>
+    <div class="section" id="auth-section">
+      <div class="section-title">Access <span id="auth-status"></span></div>
+      <div id="login-forms">
+        <div id="room-login-form">
+          <div class="auth-form">
+            <input type="password" id="room-secret-input" placeholder="Enter room secret to view your room" autocomplete="off" aria-label="Room secret">
+            <button class="btn btn-primary" id="room-login-btn" type="button">View Room</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:4px;">
+          <button class="auth-toggle" id="toggle-admin" type="button">Admin login</button>
+        </div>
+        <div id="admin-login-form" class="hidden" style="margin-top:12px;">
+          <div class="auth-form">
+            <input type="password" id="admin-token-input" placeholder="Enter admin token" autocomplete="off" aria-label="Admin token">
+            <button class="btn btn-primary" id="admin-login-btn" type="button">Admin Login</button>
+          </div>
+        </div>
+      </div>
+      <div id="logged-in-info" class="hidden">
+        <div class="auth-msg" id="logged-in-msg"></div>
+        <button class="logout-btn" id="logout-btn" type="button">Logout</button>
+      </div>
+    </div>
     <div class="section">
       <div class="section-title">Active Rooms</div>
       <div id="rooms-container"><div class="empty-state">Loading...</div></div>
@@ -510,6 +583,41 @@ function getDashboardHtml(): string {
     (function() {
       var lastFetch = 0;
       var consecutiveErrors = 0;
+      var mode = 'public';
+      var secretHash = null;
+      var adminToken = null;
+
+      function sha256(str) {
+        var encoder = new TextEncoder();
+        return crypto.subtle.digest('SHA-256', encoder.encode(str)).then(function(buf) {
+          var arr = new Uint8Array(buf);
+          var hex = '';
+          for (var i = 0; i < arr.length; i++) {
+            hex += ('0' + arr[i].toString(16)).slice(-2);
+          }
+          return hex;
+        });
+      }
+
+      function loadSession() {
+        try {
+          var stored = sessionStorage.getItem('mflow_dash_mode');
+          if (stored) {
+            var s = JSON.parse(stored);
+            if (s.mode === 'room' && s.secretHash) { mode = 'room'; secretHash = s.secretHash; }
+            else if (s.mode === 'admin' && s.adminToken) { mode = 'admin'; adminToken = s.adminToken; }
+          }
+        } catch (_) {}
+      }
+
+      function saveSession() {
+        try {
+          if (mode === 'room') sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'room', secretHash: secretHash }));
+          else if (mode === 'admin') sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'admin', adminToken: adminToken }));
+          else sessionStorage.removeItem('mflow_dash_mode');
+        } catch (_) {}
+      }
+
       function formatUptime(seconds) {
         if (seconds < 60) return seconds + 's';
         if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's';
@@ -530,49 +638,79 @@ function getDashboardHtml(): string {
         div.textContent = str;
         return div.innerHTML;
       }
+
+      function updateModeUI() {
+        var badge = document.getElementById('mode-badge');
+        var loginForms = document.getElementById('login-forms');
+        var loggedInInfo = document.getElementById('logged-in-info');
+        var loggedInMsg = document.getElementById('logged-in-msg');
+        badge.className = 'mode-badge ' + mode;
+        badge.textContent = mode.toUpperCase();
+        if (mode === 'public') {
+          loginForms.classList.remove('hidden');
+          loggedInInfo.classList.add('hidden');
+        } else {
+          loginForms.classList.add('hidden');
+          loggedInInfo.classList.remove('hidden');
+          loggedInMsg.textContent = mode === 'room' ? 'Viewing rooms matching your secret' : 'Admin mode — viewing all rooms';
+        }
+      }
+
       function renderRooms(data) {
         var container = document.getElementById('rooms-container');
+        if (mode === 'public') {
+          container.innerHTML = '<div class="auth-msg">Enter a room secret or admin token to view room details.</div>';
+          return;
+        }
         if (!data.rooms || data.rooms.length === 0) {
-          container.innerHTML = '<div class="empty-state">No rooms active</div>';
+          container.innerHTML = '<div class="empty-state">' + (mode === 'room' ? 'No active room with this secret' : 'No rooms active') + '</div>';
           return;
         }
         var html = '';
         for (var i = 0; i < data.rooms.length; i++) {
           var room = data.rooms[i];
-          html += '<div class="room">';
-          html += '<div class="room-header">';
+          html += '<div class="room"><div class="room-header">';
           html += '<span class="room-id">Room: ' + escapeHtml(room.id.substring(0, 8)) + '</span>';
           html += '<span class="room-meta">Peers: ' + room.peerCount + '</span>';
-          html += '<span class="room-meta">Age: ' + formatAge(room.createdAt) + '</span>';
-          html += '</div>';
+          html += '<span class="room-meta">Age: ' + formatAge(room.createdAt) + '</span></div>';
           for (var j = 0; j < room.peers.length; j++) {
             var peer = room.peers[j];
-            var typeClass = peer.peerType === 'agent' ? 'agent' : 'human';
-            html += '<div class="peer">';
-            html += '<span class="peer-dot ' + typeClass + '"></span>';
+            var tc = peer.peerType === 'agent' ? 'agent' : 'human';
+            html += '<div class="peer"><span class="peer-dot ' + tc + '"></span>';
             html += '<span class="peer-name">' + escapeHtml(peer.peerName) + '</span>';
-            html += '<span class="peer-type ' + typeClass + '">(' + escapeHtml(peer.peerType) + ')</span>';
-            html += '</div>';
+            html += '<span class="peer-type ' + tc + '">(' + escapeHtml(peer.peerType) + ')</span></div>';
           }
           html += '</div>';
         }
         container.innerHTML = html;
       }
+
+      function buildApiUrl() {
+        if (mode === 'admin' && adminToken) return '/api/rooms?admin=' + encodeURIComponent(adminToken);
+        if (mode === 'room' && secretHash) return '/api/rooms?secretHash=' + encodeURIComponent(secretHash);
+        return '/api/rooms';
+      }
+
       function updateDashboard() {
-        fetch('/api/rooms')
+        fetch(buildApiUrl())
           .then(function(res) {
+            if (res.status === 403) {
+              mode = 'public'; adminToken = null; saveSession(); updateModeUI();
+              document.getElementById('rooms-container').innerHTML = '<div class="auth-msg error-msg">Invalid admin token. Logged out.</div>';
+              return null;
+            }
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.json();
           })
           .then(function(data) {
-            consecutiveErrors = 0;
-            lastFetch = Date.now();
+            if (!data) return;
+            consecutiveErrors = 0; lastFetch = Date.now();
             document.getElementById('status-dot').className = 'dot';
             document.getElementById('status-text').textContent = 'Running';
             document.getElementById('uptime').textContent = formatUptime(data.uptime);
             document.getElementById('room-count').textContent = data.totalRooms;
             document.getElementById('peer-count').textContent = data.totalPeers;
-            document.getElementById('memory').textContent = data.memoryMB + 'MB';
+            document.getElementById('memory').textContent = (data.memoryMB || 0) + 'MB';
             document.getElementById('error-banner').style.display = 'none';
             renderRooms(data);
           })
@@ -590,7 +728,38 @@ function getDashboardHtml(): string {
         var ago = Math.floor((Date.now() - lastFetch) / 1000);
         document.getElementById('last-updated').textContent = ago + 's ago';
       }
-      updateDashboard();
+
+      document.getElementById('room-login-btn').addEventListener('click', function() {
+        var secret = document.getElementById('room-secret-input').value.trim();
+        if (!secret) return;
+        sha256(secret).then(function(hash) {
+          mode = 'room'; secretHash = hash; adminToken = null;
+          saveSession(); updateModeUI(); updateDashboard();
+        });
+      });
+      document.getElementById('room-secret-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('room-login-btn').click();
+      });
+      document.getElementById('toggle-admin').addEventListener('click', function() {
+        document.getElementById('admin-login-form').classList.toggle('hidden');
+      });
+      document.getElementById('admin-login-btn').addEventListener('click', function() {
+        var token = document.getElementById('admin-token-input').value.trim();
+        if (!token) return;
+        mode = 'admin'; adminToken = token; secretHash = null;
+        saveSession(); updateModeUI(); updateDashboard();
+      });
+      document.getElementById('admin-token-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('admin-login-btn').click();
+      });
+      document.getElementById('logout-btn').addEventListener('click', function() {
+        mode = 'public'; secretHash = null; adminToken = null; saveSession(); updateModeUI();
+        document.getElementById('room-secret-input').value = '';
+        document.getElementById('admin-token-input').value = '';
+        updateDashboard();
+      });
+
+      loadSession(); updateModeUI(); updateDashboard();
       setInterval(updateDashboard, 2000);
       setInterval(updateTimestamp, 1000);
     })();
@@ -627,16 +796,50 @@ Deno.serve({ port: PORT }, (req, info) => {
     });
   }
 
-  // Rooms API — detailed room info for dashboard
+  // Rooms API — scoped by auth level
   if (url.pathname === "/api/rooms" && req.method === "GET") {
+    const adminTokenParam = url.searchParams.get("admin");
+    const secretHashParam = url.searchParams.get("secretHash");
+    const uptime = Math.floor((Date.now() - startTime) / 1000);
+
+    // Admin mode: return all rooms if token matches
+    if (adminTokenParam) {
+      const envToken = Deno.env.get("ADMIN_TOKEN");
+      if (!envToken || adminTokenParam !== envToken) {
+        return Response.json({ error: "Invalid admin token" }, { status: 403 });
+      }
+      let totalPeers = 0;
+      for (const room of rooms.values()) totalPeers += room.peers.size;
+      return Response.json({
+        rooms: getRoomDetails(),
+        totalRooms: rooms.size,
+        totalPeers,
+        uptime,
+        memoryMB: 0,
+      });
+    }
+
+    // Room-scoped: return only rooms matching secretHash
+    if (secretHashParam) {
+      const matched = getRoomDetailsBySecretHash(secretHashParam);
+      let matchedPeers = 0;
+      for (const r of matched) matchedPeers += r.peerCount;
+      return Response.json({
+        rooms: matched,
+        totalRooms: matched.length,
+        totalPeers: matchedPeers,
+        uptime,
+        memoryMB: 0,
+      });
+    }
+
+    // Public: aggregate stats only — no room IDs, no peer names
     let totalPeers = 0;
     for (const room of rooms.values()) totalPeers += room.peers.size;
-
     return Response.json({
-      rooms: getRoomDetails(),
       totalRooms: rooms.size,
       totalPeers,
-      uptime: Math.floor((Date.now() - startTime) / 1000),
+      uptime,
       memoryMB: 0,
     });
   }

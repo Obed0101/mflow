@@ -280,14 +280,48 @@ const server = Bun.serve<PeerContext>({
       });
     }
 
-    // Rooms API — detailed room info for dashboard
+    // Rooms API — scoped by auth level
     if (url.pathname === "/api/rooms" && req.method === "GET") {
+      const adminToken = url.searchParams.get("admin");
+      const secretHash = url.searchParams.get("secretHash");
+      const uptime = Math.floor((Date.now() - startTime) / 1000);
+      const memoryMB = Math.round(process.memoryUsage.rss() / 1_048_576);
+
+      // Admin mode: return all rooms if token matches
+      if (adminToken) {
+        const envToken = process.env["ADMIN_TOKEN"];
+        if (!envToken || adminToken !== envToken) {
+          return Response.json({ error: "Invalid admin token" }, { status: 403 });
+        }
+        return Response.json({
+          rooms: rooms.getRoomDetails(),
+          totalRooms: rooms.getRoomCount(),
+          totalPeers: rooms.getTotalPeerCount(),
+          uptime,
+          memoryMB,
+        });
+      }
+
+      // Room-scoped: return only rooms matching secretHash
+      if (secretHash) {
+        const matched = rooms.getRoomDetailsBySecretHash(secretHash);
+        let matchedPeers = 0;
+        for (const r of matched) matchedPeers += r.peerCount;
+        return Response.json({
+          rooms: matched,
+          totalRooms: matched.length,
+          totalPeers: matchedPeers,
+          uptime,
+          memoryMB,
+        });
+      }
+
+      // Public: aggregate stats only — no room IDs, no peer names
       return Response.json({
-        rooms: rooms.getRoomDetails(),
         totalRooms: rooms.getRoomCount(),
         totalPeers: rooms.getTotalPeerCount(),
-        uptime: Math.floor((Date.now() - startTime) / 1000),
-        memoryMB: Math.round(process.memoryUsage.rss() / 1_048_576),
+        uptime,
+        memoryMB,
       });
     }
 

@@ -1,6 +1,11 @@
 /**
  * Dashboard HTML template for the mflow signaling server.
  * Pure HTML + CSS + vanilla JS — no frameworks, no build step.
+ *
+ * Three modes:
+ * - Public (default): aggregate stats only, no room IDs or peer names
+ * - Room-scoped: enter room secret, client-side SHA-256 hash, show only matching rooms
+ * - Admin: enter admin token, server validates against ADMIN_TOKEN env var, show all rooms
  */
 
 export function getDashboardHtml(): string {
@@ -91,6 +96,102 @@ export function getDashboardHtml(): string {
       margin-bottom: 16px;
     }
 
+    .auth-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .auth-form input {
+      flex: 1;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #c9d1d9;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .auth-form input:focus {
+      border-color: #58a6ff;
+      box-shadow: 0 0 0 2px #58a6ff30;
+    }
+
+    .auth-form button, .btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px 16px;
+      color: #c9d1d9;
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .auth-form button:hover, .btn:hover {
+      background: #30363d;
+      border-color: #484f58;
+    }
+
+    .btn-primary {
+      background: #238636;
+      border-color: #2ea043;
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background: #2ea043;
+      border-color: #3fb950;
+    }
+
+    .mode-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .mode-badge.public { background: #1f2937; color: #6b7280; border: 1px solid #374151; }
+    .mode-badge.room { background: #0c2d1b; color: #3fb950; border: 1px solid #238636; }
+    .mode-badge.admin { background: #2d1b0c; color: #d29922; border: 1px solid #9e6a03; }
+
+    .auth-toggle {
+      font-size: 12px;
+      color: #6b7280;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      background: none;
+      border: none;
+      font-family: inherit;
+      padding: 0;
+    }
+
+    .auth-toggle:hover { color: #c9d1d9; }
+
+    .logout-btn {
+      font-size: 12px;
+      color: #f85149;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      background: none;
+      border: none;
+      font-family: inherit;
+      padding: 0;
+      margin-left: 12px;
+    }
+
+    .logout-btn:hover { color: #ff7b72; }
+
     .room {
       margin-bottom: 16px;
       padding-bottom: 16px;
@@ -152,6 +253,14 @@ export function getDashboardHtml(): string {
       font-size: 13px;
     }
 
+    .auth-msg {
+      color: #6b7280;
+      font-size: 13px;
+      padding: 8px 0;
+    }
+
+    .auth-msg.error-msg { color: #f85149; }
+
     .footer {
       border: 1px solid #21262d;
       border-radius: 8px;
@@ -178,17 +287,20 @@ export function getDashboardHtml(): string {
       font-size: 13px;
     }
 
+    .hidden { display: none !important; }
+
     @media (max-width: 480px) {
       body { padding: 12px; font-size: 13px; }
       .header, .section, .footer { padding: 16px; }
       .status-row { gap: 4px 16px; }
+      .auth-form { flex-direction: column; }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>mflow signaling server</h1>
+      <h1>mflow signaling server <span class="mode-badge public" id="mode-badge">PUBLIC</span></h1>
       <div class="status-row">
         <div class="status-item">
           <span class="status-label">Status:</span>
@@ -216,6 +328,33 @@ export function getDashboardHtml(): string {
 
     <div class="error-banner" id="error-banner"></div>
 
+    <div class="section" id="auth-section">
+      <div class="section-title">Access <span id="auth-status"></span></div>
+
+      <div id="login-forms">
+        <div id="room-login-form">
+          <div class="auth-form">
+            <input type="password" id="room-secret-input" placeholder="Enter room secret to view your room" autocomplete="off" aria-label="Room secret">
+            <button class="btn btn-primary" id="room-login-btn" type="button">View Room</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:4px;">
+          <button class="auth-toggle" id="toggle-admin" type="button">Admin login</button>
+        </div>
+        <div id="admin-login-form" class="hidden" style="margin-top:12px;">
+          <div class="auth-form">
+            <input type="password" id="admin-token-input" placeholder="Enter admin token" autocomplete="off" aria-label="Admin token">
+            <button class="btn btn-primary" id="admin-login-btn" type="button">Admin Login</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="logged-in-info" class="hidden">
+        <div class="auth-msg" id="logged-in-msg"></div>
+        <button class="logout-btn" id="logout-btn" type="button">Logout</button>
+      </div>
+    </div>
+
     <div class="section">
       <div class="section-title">Active Rooms</div>
       <div id="rooms-container">
@@ -233,6 +372,57 @@ export function getDashboardHtml(): string {
     (function() {
       var lastFetch = 0;
       var consecutiveErrors = 0;
+
+      // Mode: 'public' | 'room' | 'admin'
+      var mode = 'public';
+      var secretHash = null;  // SHA-256 hash of room secret (for room mode)
+      var adminToken = null;  // Admin token (for admin mode)
+
+      // ─── Crypto ──────────────────────────────────────────
+
+      function sha256(str) {
+        var encoder = new TextEncoder();
+        return crypto.subtle.digest('SHA-256', encoder.encode(str)).then(function(buf) {
+          var arr = new Uint8Array(buf);
+          var hex = '';
+          for (var i = 0; i < arr.length; i++) {
+            hex += ('0' + arr[i].toString(16)).slice(-2);
+          }
+          return hex;
+        });
+      }
+
+      // ─── Session Storage ─────────────────────────────────
+
+      function loadSession() {
+        try {
+          var stored = sessionStorage.getItem('mflow_dash_mode');
+          if (stored) {
+            var s = JSON.parse(stored);
+            if (s.mode === 'room' && s.secretHash) {
+              mode = 'room';
+              secretHash = s.secretHash;
+            } else if (s.mode === 'admin' && s.adminToken) {
+              mode = 'admin';
+              adminToken = s.adminToken;
+            }
+          }
+        } catch (_) {}
+      }
+
+      function saveSession() {
+        try {
+          if (mode === 'room') {
+            sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'room', secretHash: secretHash }));
+          } else if (mode === 'admin') {
+            sessionStorage.setItem('mflow_dash_mode', JSON.stringify({ mode: 'admin', adminToken: adminToken }));
+          } else {
+            sessionStorage.removeItem('mflow_dash_mode');
+          }
+        } catch (_) {}
+      }
+
+      // ─── UI Helpers ──────────────────────────────────────
 
       function formatUptime(seconds) {
         if (seconds < 60) return seconds + 's';
@@ -257,10 +447,43 @@ export function getDashboardHtml(): string {
         return div.innerHTML;
       }
 
+      function updateModeUI() {
+        var badge = document.getElementById('mode-badge');
+        var loginForms = document.getElementById('login-forms');
+        var loggedInInfo = document.getElementById('logged-in-info');
+        var loggedInMsg = document.getElementById('logged-in-msg');
+
+        badge.className = 'mode-badge ' + mode;
+        badge.textContent = mode.toUpperCase();
+
+        if (mode === 'public') {
+          loginForms.classList.remove('hidden');
+          loggedInInfo.classList.add('hidden');
+        } else {
+          loginForms.classList.add('hidden');
+          loggedInInfo.classList.remove('hidden');
+          if (mode === 'room') {
+            loggedInMsg.textContent = 'Viewing rooms matching your secret';
+          } else {
+            loggedInMsg.textContent = 'Admin mode — viewing all rooms';
+          }
+        }
+      }
+
       function renderRooms(data) {
         var container = document.getElementById('rooms-container');
+
+        if (mode === 'public') {
+          container.innerHTML = '<div class="auth-msg">Enter a room secret or admin token to view room details.</div>';
+          return;
+        }
+
         if (!data.rooms || data.rooms.length === 0) {
-          container.innerHTML = '<div class="empty-state">No rooms active</div>';
+          if (mode === 'room') {
+            container.innerHTML = '<div class="empty-state">No active room with this secret</div>';
+          } else {
+            container.innerHTML = '<div class="empty-state">No rooms active</div>';
+          }
           return;
         }
 
@@ -290,13 +513,36 @@ export function getDashboardHtml(): string {
         container.innerHTML = html;
       }
 
+      // ─── Fetch Logic ─────────────────────────────────────
+
+      function buildApiUrl() {
+        if (mode === 'admin' && adminToken) {
+          return '/api/rooms?admin=' + encodeURIComponent(adminToken);
+        }
+        if (mode === 'room' && secretHash) {
+          return '/api/rooms?secretHash=' + encodeURIComponent(secretHash);
+        }
+        return '/api/rooms';
+      }
+
       function updateDashboard() {
-        fetch('/api/rooms')
+        fetch(buildApiUrl())
           .then(function(res) {
+            if (res.status === 403) {
+              // Admin token invalid — logout
+              mode = 'public';
+              adminToken = null;
+              saveSession();
+              updateModeUI();
+              var container = document.getElementById('rooms-container');
+              container.innerHTML = '<div class="auth-msg error-msg">Invalid admin token. Logged out.</div>';
+              return null;
+            }
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.json();
           })
           .then(function(data) {
+            if (!data) return;
             consecutiveErrors = 0;
             lastFetch = Date.now();
 
@@ -305,7 +551,7 @@ export function getDashboardHtml(): string {
             document.getElementById('uptime').textContent = formatUptime(data.uptime);
             document.getElementById('room-count').textContent = data.totalRooms;
             document.getElementById('peer-count').textContent = data.totalPeers;
-            document.getElementById('memory').textContent = data.memoryMB + 'MB';
+            document.getElementById('memory').textContent = (data.memoryMB || 0) + 'MB';
 
             document.getElementById('error-banner').style.display = 'none';
 
@@ -328,6 +574,61 @@ export function getDashboardHtml(): string {
         document.getElementById('last-updated').textContent = ago + 's ago';
       }
 
+      // ─── Event Handlers ──────────────────────────────────
+
+      document.getElementById('room-login-btn').addEventListener('click', function() {
+        var input = document.getElementById('room-secret-input');
+        var secret = input.value.trim();
+        if (!secret) return;
+        sha256(secret).then(function(hash) {
+          mode = 'room';
+          secretHash = hash;
+          adminToken = null;
+          saveSession();
+          updateModeUI();
+          updateDashboard();
+        });
+      });
+
+      document.getElementById('room-secret-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('room-login-btn').click();
+      });
+
+      document.getElementById('toggle-admin').addEventListener('click', function() {
+        document.getElementById('admin-login-form').classList.toggle('hidden');
+      });
+
+      document.getElementById('admin-login-btn').addEventListener('click', function() {
+        var input = document.getElementById('admin-token-input');
+        var token = input.value.trim();
+        if (!token) return;
+        mode = 'admin';
+        adminToken = token;
+        secretHash = null;
+        saveSession();
+        updateModeUI();
+        updateDashboard();
+      });
+
+      document.getElementById('admin-token-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('admin-login-btn').click();
+      });
+
+      document.getElementById('logout-btn').addEventListener('click', function() {
+        mode = 'public';
+        secretHash = null;
+        adminToken = null;
+        saveSession();
+        updateModeUI();
+        document.getElementById('room-secret-input').value = '';
+        document.getElementById('admin-token-input').value = '';
+        updateDashboard();
+      });
+
+      // ─── Init ────────────────────────────────────────────
+
+      loadSession();
+      updateModeUI();
       updateDashboard();
       setInterval(updateDashboard, 2000);
       setInterval(updateTimestamp, 1000);

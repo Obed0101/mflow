@@ -168,4 +168,31 @@ export class RoomManager {
     }
     return details;
   }
+
+  /**
+   * Get room details filtered by secretHash. Returns only rooms matching the hash.
+   */
+  getRoomDetailsBySecretHash(secretHash: string): Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[] }> {
+    const details: Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[] }> = [];
+    for (const room of this.rooms.values()) {
+      if (room.secretHash !== secretHash) continue;
+      const peers: PeerInfo[] = [];
+      for (const [peerId, ws] of room.peers) {
+        const ctx = ws.data;
+        peers.push({
+          peerId,
+          peerName: ctx.peerName,
+          peerType: ctx.peerType,
+          joinedAt: 0,
+        });
+      }
+      details.push({
+        id: room.id,
+        peerCount: room.peers.size,
+        createdAt: room.createdAt,
+        peers,
+      });
+    }
+    return details;
+  }
 }
