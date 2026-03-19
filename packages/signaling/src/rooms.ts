@@ -142,4 +142,30 @@ export class RoomManager {
     if (!room) return [];
     return Array.from(room.peers.values());
   }
+
+  /**
+   * Get detailed info for all rooms including peer lists.
+   */
+  getRoomDetails(): Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[] }> {
+    const details: Array<{ id: string; peerCount: number; createdAt: number; peers: PeerInfo[] }> = [];
+    for (const room of this.rooms.values()) {
+      const peers: PeerInfo[] = [];
+      for (const [peerId, ws] of room.peers) {
+        const ctx = ws.data;
+        peers.push({
+          peerId,
+          peerName: ctx.peerName,
+          peerType: ctx.peerType,
+          joinedAt: 0,
+        });
+      }
+      details.push({
+        id: room.id,
+        peerCount: room.peers.size,
+        createdAt: room.createdAt,
+        peers,
+      });
+    }
+    return details;
+  }
 }

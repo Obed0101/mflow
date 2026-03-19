@@ -12,6 +12,7 @@ import type { HealthResponse } from "@mflow/shared";
 import { RoomManager, type PeerContext } from "./rooms.js";
 import { RateLimiter } from "./ratelimit.js";
 import { relaySignal, relayData } from "./relay.js";
+import { getDashboardHtml } from "./dashboard-html.js";
 
 // ─── State ──────────────────────────────────────────────────
 
@@ -270,6 +271,24 @@ const server = Bun.serve<PeerContext>({
         memoryMB: Math.round(process.memoryUsage.rss() / 1_048_576),
       };
       return Response.json(body);
+    }
+
+    // Dashboard
+    if (url.pathname === "/dashboard" && req.method === "GET") {
+      return new Response(getDashboardHtml(), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+
+    // Rooms API — detailed room info for dashboard
+    if (url.pathname === "/api/rooms" && req.method === "GET") {
+      return Response.json({
+        rooms: rooms.getRoomDetails(),
+        totalRooms: rooms.getRoomCount(),
+        totalPeers: rooms.getTotalPeerCount(),
+        uptime: Math.floor((Date.now() - startTime) / 1000),
+        memoryMB: Math.round(process.memoryUsage.rss() / 1_048_576),
+      });
     }
 
     // WebSocket upgrade
