@@ -171,9 +171,10 @@ mflow start [options]     Start sync daemon and join a room
   -t, --transport <type>  Transport: relay (default) or p2p
 
 mflow stop                Stop daemon, persist CRDT state, cleanup
-mflow status              Show room, peers, files tracked, sync stats
-mflow pause               Pause outgoing sync (keep receiving changes)
+mflow status              Show room, peers, files tracked, sync stats, active pauses
+mflow pause               Pause outgoing sync (keeps receiving + buffering changes)
 mflow resume              Resume sync and apply buffered changes
+mflow resume --force      Force-resume (admin override — clears ALL pause reasons)
 mflow ignore <pattern>    Add gitignore-style pattern to .mflowignore
 mflow init                Initialize .mflow/ directory with default config
 ```
@@ -369,6 +370,53 @@ mflow start --room my-room --secret my-secret --transport p2p
 
 Pros: Lower latency on LAN. Code never touches any server.
 Cons: May fail behind corporate firewalls or symmetric NAT.
+
+---
+
+## Pause/Resume Concurrency
+
+Mflow supports multiple simultaneous pause sources. This is critical when humans and AI agents share a room.
+
+### The Problem
+
+Without concurrency handling, this happens:
+
+```
+User:  mflow pause        (preparing to git commit)
+Agent: mflow_resume       (MCP tool, doesn't know user is mid-commit)
+Result: sync resumes → files change during git commit → corrupted index
+```
+
+### How Mflow Solves It
+
+Pause/resume uses a **set of reasons**, not a simple on/off switch. Each source tracks its own pause reason independently. Sync resumes only when ALL reasons are cleared.
+
+```
+User pauses:   pauseReasons = { "user:cli-session-1" }         → paused
+Git starts:    pauseReasons = { "user:cli-session-1", "git:index-lock" }  → still paused
+Git finishes:  pauseReasons = { "user:cli-session-1" }         → still paused (user hasn't resumed)
+User resumes:  pauseReasons = { }                              → syncing (all reasons cleared)
+```
+
+### Priority Rules
+
+| Source | Can Clear |
+|--------|-----------|
+| `user` (CLI) | Everything (with `--force`), or just own reasons |
+| `mcp` (AI agent) | `mcp` and `auto` reasons |
+| `git` (auto-detect) | Only `git` reasons |
+| `auto` (system) | Only `auto` reasons |
+
+An AI agent calling `mflow_resume` cannot unpause a human's pause. The human's intent is always preserved.
+
+### Force Resume (Admin Override)
+
+```bash
+# Clear ALL pause reasons regardless of source
+mflow resume --force
+```
+
+Use this when something gets stuck or you need to override all pauses.
 
 ---
 

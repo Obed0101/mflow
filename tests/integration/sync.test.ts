@@ -465,7 +465,7 @@ describe("T6.1: P2P File Sync", () => {
     const content = "export const buffered = 'yes';\n";
 
     // Pause B before A sends
-    peerB.orchestrator.pause();
+    peerB.orchestrator.addPause({ source: "user", id: "test-pause", timestamp: Date.now() });
     expect(peerB.orchestrator.state).toBe("paused");
 
     // A sends an update — B is paused and should buffer it
@@ -481,7 +481,7 @@ describe("T6.1: P2P File Sync", () => {
     expect(beforeResume).toBeNull();
 
     // Resume B — buffered updates are applied
-    peerB.orchestrator.resume();
+    peerB.orchestrator.removePause("user", "test-pause");
     expect(peerB.orchestrator.state).toBe("syncing");
 
     // Now B should have the content
