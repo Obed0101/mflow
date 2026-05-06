@@ -144,6 +144,38 @@ export function getDashboardHtml(): string {
 
     .login-row input::placeholder { color: #404040; }
 
+    .github-auth {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .github-auth-copy {
+      color: #a3a3a3;
+      font-size: 13px;
+    }
+
+    .device-box {
+      margin-top: 12px;
+      padding: 12px;
+      background: #0a0a0a;
+      border: 1px solid #1e1e1e;
+      border-radius: 6px;
+      color: #a3a3a3;
+      font-size: 13px;
+    }
+
+    .device-code {
+      display: inline-block;
+      margin: 8px 0;
+      color: #10b981;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
     .btn {
       background: #1e1e1e;
       border: 1px solid #2a2a2a;
@@ -451,6 +483,18 @@ export function getDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- GitHub auth gate, enabled only on hosted relay when configured -->
+    <div class="card hidden" id="github-auth-card">
+      <div class="github-auth">
+        <div>
+          <div class="card-title">Dashboard access</div>
+          <div class="github-auth-copy">Sign in with GitHub before viewing room status. Self-hosted relays can keep this disabled.</div>
+        </div>
+        <button class="btn btn-primary" id="github-login-btn" type="button">Sign in with GitHub</button>
+      </div>
+      <div class="device-box hidden" id="device-box"></div>
+    </div>
+
     <!-- Access (inline, not a card) -->
     <div class="access-bar" id="access-bar">
       <div class="login-row" id="login-row">
@@ -502,6 +546,10 @@ export function getDashboardHtml(): string {
       var secretHash = null;
       var knownActivityIds = {};
       var activityCount = 0;
+      var authRequired = false;
+      var authenticated = false;
+      var authConfigured = false;
+      var authPollTimer = null;
 
       // ─── Crypto ─────────────────────────────────────
 
@@ -564,11 +612,28 @@ export function getDashboardHtml(): string {
       // ─── UI State ───────────────────────────────────
 
       function updateUI() {
+        var authCard = document.getElementById('github-auth-card');
+        var accessBar = document.getElementById('access-bar');
         var loginRow = document.getElementById('login-row');
         var badgeRow = document.getElementById('room-badge-row');
         var roomCard = document.getElementById('room-card');
         var activityCard = document.getElementById('activity-card');
         var publicCard = document.getElementById('public-card');
+
+        if (authRequired && !authenticated) {
+          authCard.classList.remove('hidden');
+          accessBar.classList.add('hidden');
+          roomCard.classList.add('hidden');
+          activityCard.classList.add('hidden');
+          publicCard.classList.remove('hidden');
+          publicCard.querySelector('.public-msg').textContent = authConfigured
+            ? 'Sign in with GitHub to view dashboard data'
+            : 'Dashboard auth is required but GitHub is not configured';
+          return;
+        }
+
+        authCard.classList.add('hidden');
+        accessBar.classList.remove('hidden');
 
         if (mode === 'room') {
           loginRow.classList.add('hidden');
@@ -682,6 +747,7 @@ export function getDashboardHtml(): string {
       }
 
       function refresh() {
+        if (authRequired && !authenticated) return;
         fetch(buildUrl())
           .then(function(res) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -758,11 +824,69 @@ export function getDashboardHtml(): string {
         refresh();
       });
 
+      document.getElementById('github-login-btn').addEventListener('click', function() {
+        var box = document.getElementById('device-box');
+        box.classList.remove('hidden');
+        box.textContent = 'Starting GitHub device login...';
+
+        fetch('/api/auth/github/device/start', { method: 'POST' })
+          .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+          .then(function(result) {
+            if (!result.ok) throw new Error(result.data.error || 'GitHub login failed');
+            var data = result.data;
+            box.innerHTML = 'Open <a href="' + esc(data.verificationUri) + '" target="_blank" rel="noreferrer" style="color:#10b981">' + esc(data.verificationUri) + '</a><br><span class="device-code">' + esc(data.userCode) + '</span><br>Waiting for GitHub approval...';
+            if (authPollTimer) clearInterval(authPollTimer);
+            authPollTimer = setInterval(function() {
+              fetch('/api/auth/github/device/poll', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ flowId: data.flowId })
+              })
+                .then(function(res) { return res.json().then(function(payload) { return { ok: res.ok, payload: payload }; }); })
+                .then(function(poll) {
+                  if (poll.payload.pending) return;
+                  if (!poll.ok) throw new Error(poll.payload.error || 'GitHub approval failed');
+                  clearInterval(authPollTimer);
+                  authPollTimer = null;
+                  authenticated = true;
+                  box.classList.add('hidden');
+                  updateUI();
+                  refresh();
+                })
+                .catch(function(err) {
+                  clearInterval(authPollTimer);
+                  authPollTimer = null;
+                  box.textContent = err.message;
+                });
+            }, Math.max(1, data.interval || 5) * 1000);
+          })
+          .catch(function(err) {
+            box.textContent = err.message;
+          });
+      });
+
+      function loadAuthConfig() {
+        return fetch('/api/auth/config')
+          .then(function(res) { return res.json(); })
+          .then(function(config) {
+            authRequired = Boolean(config.required);
+            authenticated = Boolean(config.authenticated);
+            authConfigured = Boolean(config.configured);
+          })
+          .catch(function() {
+            authRequired = false;
+            authenticated = false;
+            authConfigured = false;
+          });
+      }
+
       // ─── Init ───────────────────────────────────────
 
       loadSession();
-      updateUI();
-      refresh();
+      loadAuthConfig().then(function() {
+        updateUI();
+        refresh();
+      });
       setInterval(refresh, 2000);
       setInterval(updateTimestamps, 1000);
     })();

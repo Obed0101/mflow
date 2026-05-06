@@ -1,8 +1,39 @@
 {
-  "name": "mflow",
+  "name": "mflow-sdk",
   "private": true,
   "version": "0.1.0",
   "description": "Real-time code sync layer for AI agent teams",
+  "homepage": "https://github.com/Obed0101/mflow#readme",
+  "bugs": {
+    "url": "https://github.com/Obed0101/mflow/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Obed0101/mflow.git"
+  },
+  "bin": {
+    "mflow": "packages/cli/src/index.ts"
+  },
+  "files": [
+    "README.md",
+    "CHANGELOG.md",
+    ".env.example",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "scripts/check-public-release.sh",
+    "docs/",
+    "packages/*/src/**",
+    "packages/*/package.json",
+    "packages/*/tsconfig.json",
+    "packages/cli/daemon-entry.ts",
+    "packages/signaling/.dockerignore",
+    "packages/signaling/Dockerfile",
+    "packages/signaling/deno-deploy.ts",
+    "bunfig.toml",
+    "deno.jsonc",
+    "tsconfig.json"
+  ],
   "workspaces": [
     "packages/*"
   ],

@@ -1,11 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import type { PeerInfo, SignalingErrorCode, ActivityEntry } from "@mflow/shared";
-import type { ActivityAction } from "@mflow/shared";
-import { MAX_PEERS_PER_ROOM } from "@mflow/shared";
-
-// ─── Constants ──────────────────────────────────────────────
-
-const MAX_ACTIVITY_ENTRIES = 50;
+import { DEFAULT_SIGNALING_LIMITS, type SignalingLimits } from "./limits.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -14,6 +9,7 @@ export interface Room {
   secretHash: string;
   peers: Map<string, ServerWebSocket<PeerContext>>;
   createdAt: number;
+  lastActivityAt: number;
   activity: ActivityEntry[];
 }
 
@@ -29,6 +25,8 @@ export interface PeerContext {
 
 export class RoomManager {
   private readonly rooms = new Map<string, Room>();
+
+  constructor(private readonly limits: SignalingLimits = DEFAULT_SIGNALING_LIMITS) {}
 
   getRoomCount(): number {
     return this.rooms.size;
@@ -69,20 +67,31 @@ export class RoomManager {
       }
 
       // Check peer limit
-      if (room.peers.size >= MAX_PEERS_PER_ROOM) {
+      if (room.peers.size >= this.limits.maxPeersPerRoom) {
         return {
           ok: false,
           code: "ROOM_FULL",
-          message: `Room is full (max ${MAX_PEERS_PER_ROOM} peers)`,
+          message: `Room is full (max ${this.limits.maxPeersPerRoom} peers)`,
         };
       }
     } else {
+      this.cleanupIdleRooms();
+      if (this.rooms.size >= this.limits.maxActiveRooms) {
+        return {
+          ok: false,
+          code: "ROOM_FULL",
+          message: `Relay is full (max ${this.limits.maxActiveRooms} active rooms)`,
+        };
+      }
+
+      const now = Date.now();
       // Create new room — first peer sets the secret hash
       room = {
         id: roomId,
         secretHash,
         peers: new Map(),
-        createdAt: Date.now(),
+        createdAt: now,
+        lastActivityAt: now,
         activity: [],
       };
       this.rooms.set(roomId, room);
@@ -102,6 +111,7 @@ export class RoomManager {
 
     // Add the new peer
     room.peers.set(peerId, ws);
+    room.lastActivityAt = Date.now();
     ws.data.roomId = roomId;
     ws.data.peerId = peerId;
     ws.data.peerName = peerName;
@@ -205,14 +215,34 @@ export class RoomManager {
   }
 
   /**
-   * Add an activity entry to a room. Ring buffer capped at MAX_ACTIVITY_ENTRIES.
+   * Add an activity entry to a room. Ring buffer capped at configured limit.
    */
   addActivity(roomId: string, entry: ActivityEntry): void {
     const room = this.rooms.get(roomId);
     if (!room) return;
+    room.lastActivityAt = Date.now();
     room.activity.push(entry);
-    if (room.activity.length > MAX_ACTIVITY_ENTRIES) {
+    if (room.activity.length > this.limits.maxActivityEntriesPerRoom) {
       room.activity.shift();
     }
+  }
+
+  touchRoom(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (room) room.lastActivityAt = Date.now();
+  }
+
+  cleanupIdleRooms(now = Date.now()): number {
+    let removed = 0;
+    for (const [roomId, room] of this.rooms) {
+      if (now - room.lastActivityAt <= this.limits.idleRoomTtlMs) continue;
+      for (const ws of room.peers.values()) {
+        ws.close(1001, "Room idle timeout");
+        ws.data.roomId = null;
+      }
+      this.rooms.delete(roomId);
+      removed++;
+    }
+    return removed;
   }
 }

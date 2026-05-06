@@ -4,10 +4,6 @@ import {
   SignalingSignalSchema,
   SignalingRelaySchema,
   SignalingActivitySchema,
-  UNAUTHENTICATED_TIMEOUT_MS,
-  MAX_UNAUTHENTICATED_PER_IP,
-  MAX_UNAUTHENTICATED_GLOBAL,
-  WS_MAX_PAYLOAD_BYTES,
 } from "@mflow/shared";
 import type { HealthResponse, ActivityEntry } from "@mflow/shared";
 import { RoomManager, type PeerContext } from "./rooms.js";
@@ -15,12 +11,17 @@ import { RateLimiter } from "./ratelimit.js";
 import { relaySignal, relayData } from "./relay.js";
 import { getDashboardHtml } from "./dashboard-html.js";
 import { getLandingHtml } from "./landing-html.js";
+import { loadSignalingLimits } from "./limits.js";
+import { getDashboardUser, handleAuthRequest, loadDashboardAuthConfig } from "./dashboard-auth.js";
 
 // ─── State ──────────────────────────────────────────────────
 
-const rooms = new RoomManager();
-const rateLimiter = new RateLimiter();
+const limits = loadSignalingLimits();
+const dashboardAuth = loadDashboardAuthConfig();
+const rooms = new RoomManager(limits);
+const rateLimiter = new RateLimiter(limits);
 const startTime = Date.now();
+const idleCleanupTimer = setInterval(() => rooms.cleanupIdleRooms(), 60_000);
 
 // ─── Unauthenticated Connection Tracking ────────────────────
 
@@ -31,13 +32,13 @@ function trackUnauthSocket(ws: ServerWebSocket<PeerContext>): boolean {
   const ip = ws.data.ip;
 
   // Global cap
-  if (unauthSockets.size >= MAX_UNAUTHENTICATED_GLOBAL) {
+  if (unauthSockets.size >= limits.maxUnauthenticatedSocketsGlobal) {
     return false;
   }
 
   // Per-IP cap
   const current = unauthPerIp.get(ip) ?? 0;
-  if (current >= MAX_UNAUTHENTICATED_PER_IP) {
+  if (current >= limits.maxUnauthenticatedSocketsPerIp) {
     return false;
   }
 
@@ -49,7 +50,7 @@ function trackUnauthSocket(ws: ServerWebSocket<PeerContext>): boolean {
     if (unauthSockets.has(ws)) {
       ws.close(1008, "Authentication timeout");
     }
-  }, UNAUTHENTICATED_TIMEOUT_MS);
+  }, limits.unauthenticatedTimeoutMs);
 
   return true;
 }
@@ -92,8 +93,8 @@ function handleMessage(
 ): void {
   // Pre-parse size check — reject oversized messages before JSON.parse
   const rawLen = typeof raw === "string" ? raw.length : raw.byteLength;
-  if (rawLen > WS_MAX_PAYLOAD_BYTES) {
-    sendError(ws, "MESSAGE_TOO_LARGE", `Message exceeds ${WS_MAX_PAYLOAD_BYTES} bytes`);
+  if (rawLen > limits.maxWebSocketMessageBytes) {
+    sendError(ws, "MESSAGE_TOO_LARGE", `Message exceeds ${limits.maxWebSocketMessageBytes} bytes`);
     return;
   }
 
@@ -224,6 +225,7 @@ function handleSignal(ws: ServerWebSocket<PeerContext>, data: unknown): void {
   }
 
   const result = relaySignal(rooms, ws, parsed.data);
+  if (ws.data.roomId) rooms.touchRoom(ws.data.roomId);
   if (!result.ok) {
     sendError(ws, result.code, result.message);
   }
@@ -239,6 +241,7 @@ function handleRelay(ws: ServerWebSocket<PeerContext>, data: unknown): void {
   }
 
   const result = relayData(rooms, ws, parsed.data);
+  if (ws.data.roomId) rooms.touchRoom(ws.data.roomId);
   if (!result.ok) {
     sendError(ws, result.code, result.message);
   }
@@ -287,8 +290,11 @@ const PORT = parseInt(process.env["PORT"] ?? "8787", 10);
 const server = Bun.serve<PeerContext>({
   port: PORT,
 
-  fetch(req, server) {
+  async fetch(req, server) {
     const url = new URL(req.url);
+
+    const authResponse = await handleAuthRequest(req, dashboardAuth);
+    if (authResponse) return authResponse;
 
     // Health endpoint
     if (url.pathname === "/health" && req.method === "GET") {
@@ -311,6 +317,10 @@ const server = Bun.serve<PeerContext>({
 
     // Rooms API — scoped by auth level
     if (url.pathname === "/api/rooms" && req.method === "GET") {
+      if (dashboardAuth.required && !getDashboardUser(req)) {
+        return Response.json({ error: "GitHub sign-in required" }, { status: 401 });
+      }
+
       const secretHash = url.searchParams.get("secretHash");
       const uptime = Math.floor((Date.now() - startTime) / 1000);
       const memoryMB = Math.round(process.memoryUsage.rss() / 1_048_576);
@@ -374,7 +384,7 @@ const server = Bun.serve<PeerContext>({
   },
 
   websocket: {
-    maxPayloadLength: WS_MAX_PAYLOAD_BYTES,
+    maxPayloadLength: limits.maxWebSocketMessageBytes,
 
     open(ws) {
       if (!trackUnauthSocket(ws)) {
@@ -400,4 +410,4 @@ rateLimiter.start();
 
 console.log(`mflow signaling server listening on port ${server.port}`);
 
-export { server };
+export { server, idleCleanupTimer };

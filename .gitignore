@@ -1,13 +1,37 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
-.mflow/
 coverage/
 *.tsbuildinfo
-.DS_Store
-.env*
-bun.lockb
+*.bun-build
+.bun-build
+.bun-build/**
+.bun-cache/
 
-# SEDA agent files
+# Runtime/local state
+.mflow/
+.mflow/**
+*.ystate
+*.pid
+*.sock
+.mflowignore
+
+# Local agent/tooling state
 .agents/
-CLAUDE.md
+.agents/**
 .claude/
+.claude/**
+.mcp.json
+CLAUDE.md
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+bun.lockb

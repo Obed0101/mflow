@@ -1,8 +1,4 @@
-import {
-  RATE_LIMIT_JOINS_PER_MINUTE,
-  RATE_LIMIT_MESSAGES_PER_MINUTE,
-  RATE_LIMIT_VIOLATIONS_BEFORE_DISCONNECT,
-} from "@mflow/shared";
+import { DEFAULT_SIGNALING_LIMITS, type SignalingLimits } from "./limits.js";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -23,6 +19,8 @@ export class RateLimiter {
   private readonly messages = new Map<string, RateBucket>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
+  constructor(private readonly limits: SignalingLimits = DEFAULT_SIGNALING_LIMITS) {}
+
   start(): void {
     // Cleanup stale buckets every 60s
     this.cleanupTimer = setInterval(() => this.cleanup(), 60_000);
@@ -38,11 +36,11 @@ export class RateLimiter {
   }
 
   checkJoin(ip: string): RateLimitResult {
-    return this.check(this.joins, ip, RATE_LIMIT_JOINS_PER_MINUTE);
+    return this.check(this.joins, ip, this.limits.joinAttemptsPerMinute);
   }
 
   checkMessage(ip: string): RateLimitResult {
-    return this.check(this.messages, ip, RATE_LIMIT_MESSAGES_PER_MINUTE);
+    return this.check(this.messages, ip, this.limits.messagesPerMinute);
   }
 
   private check(
@@ -67,7 +65,7 @@ export class RateLimiter {
       return {
         allowed: false,
         shouldDisconnect:
-          bucket.violations >= RATE_LIMIT_VIOLATIONS_BEFORE_DISCONNECT,
+          bucket.violations >= this.limits.rateLimitViolationsBeforeDisconnect,
       };
     }
 

@@ -5,3 +5,4 @@ export * from "./schemas.js";
 export * from "./crypto.js";
 export * from "./diff.js";
 export * from "./ignore.js";
+export * from "./auth-config.js";

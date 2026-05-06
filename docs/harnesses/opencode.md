@@ -1,0 +1,47 @@
+# opencode Harness Guide
+
+mflow is not tied to a specific agent runtime. For opencode, use the CLI daemon in each synced worktree.
+
+## Start a shared room
+
+```bash
+export MFLOW_SECRET="$(openssl rand -hex 32)"
+mflow start --room project-x/opencode --secret "$MFLOW_SECRET"
+```
+
+Join from another worktree:
+
+```bash
+mflow start --room project-x/opencode --secret "$MFLOW_SECRET"
+```
+
+## Suggested command aliases
+
+Add shell or opencode task aliases for common controls:
+
+```bash
+mflow status --watch
+mflow pause
+mflow resume
+mflow locks
+```
+
+## File locking
+
+Before assigning multiple agents around the same area:
+
+```bash
+mflow lock packages/daemon/src/sync.ts --duration 2m
+```
+
+Release when done:
+
+```bash
+mflow unlock packages/daemon/src/sync.ts
+```
+
+## Self-hosting
+
+```bash
+mflow start --room project-x/opencode --secret "$MFLOW_SECRET" --signaling ws://localhost:8787
+```

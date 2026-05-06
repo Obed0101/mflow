@@ -6,6 +6,7 @@ import {
   MFLOW_IGNORE_FILE,
   MFLOW_CRDT_DIR,
   DEFAULT_IGNORE_PATTERNS,
+  DEFAULT_SIGNALING_URL,
 } from "@mflow/shared";
 import { displaySuccess, displayInfo, displayWarning } from "../display.js";
 
@@ -16,9 +17,9 @@ name = ""
 type = "auto"
 
 [sync]
-signaling = "wss://signal.mflow.dev"
+signaling = "${DEFAULT_SIGNALING_URL}"
 room = ""
-# secret: set via MFLOW_SECRET env var or 'mflow join' command
+# secret: set via MFLOW_SECRET env var or 'mflow start --secret'
 debounce_ms = 50
 max_file_size_bytes = 1048576
 max_tracked_files = 5000

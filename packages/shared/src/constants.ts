@@ -3,7 +3,7 @@
 export const MAX_FILE_SIZE_BYTES = 1_048_576; // 1MB
 export const MAX_TRACKED_FILES = 5_000;
 export const TRACKED_FILES_WARNING = 4_000;
-export const MAX_PEERS_PER_ROOM = 10;
+export const MAX_PEERS_PER_ROOM = 4;
 
 // ─── Timing ──────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ export const LOCK_EXPIRY_CHECK_MS = 5_000;       // check for expired locks ever
 // ─── Rate Limits ─────────────────────────────────────────────
 
 export const RATE_LIMIT_JOINS_PER_MINUTE = 10;
-export const RATE_LIMIT_MESSAGES_PER_MINUTE = 100;
+export const RATE_LIMIT_MESSAGES_PER_MINUTE = 120;
 export const RATE_LIMIT_VIOLATIONS_BEFORE_DISCONNECT = 3;
 
 // ─── Networking ──────────────────────────────────────────────
@@ -87,6 +87,9 @@ export const UNAUTHENTICATED_TIMEOUT_MS = 10_000;
 export const MAX_UNAUTHENTICATED_PER_IP = 5;
 export const MAX_UNAUTHENTICATED_GLOBAL = 500;
 export const RELAY_DATA_MAX_LENGTH = 65_536;
+export const MAX_ACTIVE_ROOMS = 200;
+export const IDLE_ROOM_TTL_MS = 15 * 60_000;
+export const MAX_ACTIVITY_ENTRIES_PER_ROOM = 20;
 
 // ─── Crypto ──────────────────────────────────────────────────
 

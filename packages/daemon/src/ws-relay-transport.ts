@@ -447,6 +447,11 @@ export class WSRelayTransport implements ITransport {
     }
   }
 
+  sendActivity(action: import("@mflow/shared").ActivityAction, file: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify({ type: "activity", action, file }));
+  }
+
   // ─── Helpers ────────────────────────────────────────────
 
   private sendRelay(to: string, data: Uint8Array): void {

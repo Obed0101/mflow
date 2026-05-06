@@ -126,6 +126,8 @@ export interface ITransport {
     callback: (peerId: string, data: AwarenessData) => void
   ): void;
 
+  sendActivity(action: import("./protocol.js").ActivityAction, file: string): void;
+
   getPeers(): PeerInfo[];
   getConnectionState(): ConnectionState;
 }

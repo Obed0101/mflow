@@ -1,722 +1,203 @@
-```
-           ___  __
- _ __ ___ / _|| | _____      __
-| '_ ` _ \| |_ | |/ _ \ \ /\ / /
-| | | | | |  _|| | (_) \ V  V /
-|_| |_| |_|_|  |_|\___/ \_/\_/
-```
+# mflow
 
-Real-time code sync for AI agent teams.
+Open-source real-time file sync for AI agent teams and developers working across multiple worktrees or machines.
 
----
+mflow keeps local project files in sync while agents or humans edit. It is CLI-first, self-hostable, room-secret based, and designed to reduce blind parallel edits before you commit to git.
 
-## What is Mflow?
+## Current release status
 
-Mflow syncs file changes in real-time between AI coding agents (Claude Code, Cursor, Codex, Cline) and human developers working on the same codebase. It uses CRDTs (Y.js) to merge concurrent edits without conflicts, encrypted end-to-end.
-
-Think of it as **Google Docs for code repos** -- P2P, git-aware, and designed for multi-agent workflows.
-
-### The Magic
-
-Agent A creates `hello.ts` in its folder. In less than 1 second, `hello.ts` appears in Agent B's folder. Identical. No git, no commit, no merge, no nothing.
-
-5 agents in a swarm see each other's changes **while they work**, not after. Like editing the same Google Doc, but with local files in separate folders.
-
-### Without mflow (current workflow)
-
-```
-Agent A edits in worktree-a  ->  git add  ->  git commit  ->  git push
-Agent B                      ->  git pull  ->  MERGE CONFLICT  ->  resolve  ->  retry
-Time: minutes. Conflicts: frequent. Agents: blind to each other.
-```
-
-### With mflow
-
-```
-Agent A edits in folder-a  ->  appears in folder-b automatically
-Time: <1 second. Conflicts: prevented by propagation gate. Agents: see everything live.
-```
-
-### What Mflow Is NOT
-
-- Not a git replacement -- git remains the source of truth for version history
-- Not a cloud IDE -- your code stays on your machine
-- Not a merge tool -- it **prevents** conflicts instead of resolving them
-- Not a CI/CD tool -- it's a live collaboration layer that sits between "editing" and "committing"
-
----
-
-## Quick Start
+mflow is being prepared for its first public OSS release. The initial npm package name is `mflow-sdk`; the installed binary is still `mflow`.
 
 ```bash
-# Clone and install
-git clone https://github.com/Obed0101/mflow.git
-cd mflow
-bun install
-
-# Start syncing in your project directory
-bun packages/cli/src/index.ts start --room my-project --secret my-shared-secret
-
-# On another machine or worktree, join the same room
-bun packages/cli/src/index.ts start --room my-project --secret my-shared-secret
+npm i -g mflow-sdk
+mflow --help
 ```
 
-Any file change in one directory appears in the other within seconds. No signaling server setup needed -- the public server at `wss://mflow-signal.obed0101.deno.net` is the default.
+Do not treat hosted account login as available yet. The current public and self-hosted flows use a room name plus a strong shared secret. Hosted account/device authorization is planned for a future hosted product.
 
----
+## What mflow is
 
-## How It Works
+- A local daemon that watches project files and syncs changes with peers in the same room.
+- A WebSocket relay protocol for peer discovery and encrypted payload forwarding.
+- A CLI for start/stop/status/pause/resume/file-lock workflows.
+- A small MCP package for harness integrations.
+- A self-hostable signaling server for Bun, Docker, and Deno Deploy.
 
-```
-Agent A saves auth.ts
-  -> chokidar detects the change
-  -> fast-diff computes a minimal character-level delta
-  -> Delta applied to Y.js CRDT document (conflict-free merge)
-  -> CRDT update encrypted with AES-256-GCM (shared room secret)
-  -> Encrypted bytes sent to signaling server (WebSocket relay)
-  -> Signaling server forwards bytes to Peer B (never reads them)
-  -> Peer B decrypts, applies CRDT merge (automatic, no conflicts)
-  -> Merged content written to Peer B's filesystem
-  -> Total latency: ~200-500ms on same network
-```
+## What mflow is not
 
-### Architecture
+- Not a git replacement. Git remains the source of truth for history and review.
+- Not a cloud IDE. Files remain local on every peer.
+- Not an account system in the current OSS release.
+- Not a production SLA when using the public fair-use relay.
+- Not a secret manager. You must generate and share strong room secrets safely.
 
-```
-Your Machine                    Deno Deploy                    Their Machine
-+--------------+                +-----------+                  +--------------+
-|  mflow       |   encrypted    | Signaling |   encrypted      |  mflow       |
-|  daemon      |====websocket==>|  Server   |===websocket====> |  daemon      |
-|              |                | (relay)   |                  |              |
-|  watches     |                | never     |                  |  writes      |
-|  files       |                | reads     |                  |  files       |
-|  via         |                | your      |                  |  from        |
-|  chokidar    |                | code      |                  |  CRDT        |
-+--------------+                +-----------+                  +--------------+
-```
+## Quick start
 
-The signaling server is a **dumb pipe** -- it relays encrypted bytes between peers. It cannot read your code, file names, or any content. All encryption happens locally on your machine before anything leaves.
-
-### Monorepo Structure
-
-```
-packages/
-  shared/      Types, crypto (AES-256-GCM), diff engine, ignore parser, Zod schemas
-  signaling/   WebSocket relay server (Bun + Deno Deploy versions)
-  daemon/      CRDT manager, file watcher, transport, sync orchestrator, IPC
-  cli/         CLI commands (start, stop, status, pause, resume, ignore, init)
-  mcp/         MCP server for AI agent integration
-```
-
----
-
-## Relationship with Git
-
-Mflow sits **above git**, not beside or below it. Understanding this relationship is important.
-
-### What Mflow Uses from Git
-
-| Git Feature | How Mflow Uses It |
-|-------------|-------------------|
-| `.gitignore` | Mflow reads it and excludes matching files from sync |
-| `git remote` URL | Auto-generates a room ID from `SHA-256(remote:branch)` |
-| `.git/index.lock` | Detects git operations (commit, rebase, merge) and pauses sync |
-| `.git/HEAD` | Reads current branch name for room ID generation |
-| `.git/config` | Reads remote URL |
-
-### What Mflow Does NOT Do with Git
-
-- Does not run `git commit`, `git push`, `git pull`, or any git command
-- Does not modify `.git/` directory in any way
-- Does not require git authentication (no SSH keys, no tokens, no passwords)
-- Does not need `git config user.name` or `user.email`
-- Does not need `gh` CLI
-- Does not create branches, tags, or PRs
-- Does not interact with GitHub, GitLab, or any git hosting
-
-### Git Config Requirements
-
-**None.** Mflow works in any directory, git repo or not.
-
-If you're in a git repo, Mflow reads `.gitignore` and the remote URL for convenience. If you're not in a git repo, Mflow still works -- you just need to pass `--room` manually.
+### 1. Install
 
 ```bash
-# In a git repo (room auto-detected from remote + branch)
-mflow start --secret my-secret
-
-# Not a git repo (room specified manually)
-mflow start --room my-room --secret my-secret
+npm i -g mflow-sdk
 ```
 
-### The `gh` CLI
-
-Mflow has **zero interaction** with the `gh` (GitHub CLI) tool. It doesn't use GitHub's API, doesn't create issues or PRs, and doesn't need any GitHub authentication.
-
-### Typical Workflow
+### 2. Start a room in the first worktree
 
 ```bash
-# 1. Start mflow in your project
-mflow start --room feature-auth --secret team-secret-123
+export MFLOW_SECRET="$(openssl rand -hex 32)"
+mflow start --room my-project/main --secret "$MFLOW_SECRET"
+```
 
-# 2. Work normally -- edit files, run tests, etc.
-#    All changes sync to peers in real-time
+If you omit `--secret`, mflow generates one and prints it once. Treat it like a password.
 
-# 3. When ready to commit, pause sync
+### 3. Join from another worktree or machine
+
+```bash
+mflow start --room my-project/main --secret "$MFLOW_SECRET"
+```
+
+Both peers must use the same room and secret. The public relay is used by default:
+
+```text
+wss://mflow-signal.obed0101.deno.net
+```
+
+### 4. Check status
+
+```bash
+mflow status
+mflow status --watch
+```
+
+### 5. Pause around git operations
+
+```bash
 mflow pause
 git add .
-git commit -m "feat: implement auth"
-git push
-
-# 4. Resume sync
+git commit -m "your change"
 mflow resume
+```
 
-# 5. When done for the day
+### 6. Stop
+
+```bash
 mflow stop
 ```
 
----
+## CLI basics
 
-## CLI Reference
-
-```
-mflow start [options]     Start sync daemon and join a room
-  -r, --room <name>       Room name (default: derived from git remote + branch)
-  -s, --secret <key>      Shared encryption secret (auto-generated if omitted)
-  --signaling <url>       Signaling server URL (default: wss://mflow-signal.obed0101.deno.net)
-  -t, --transport <type>  Transport: relay (default) or p2p
-
-mflow stop                Stop daemon, persist CRDT state, cleanup
-mflow status              Show room, peers, files tracked, sync stats, active pauses
-mflow pause               Pause outgoing sync (keeps receiving + buffering changes)
-mflow resume              Resume sync and apply buffered changes
-mflow resume --force      Force-resume (admin override — clears ALL pause reasons)
-mflow ignore <pattern>    Add gitignore-style pattern to .mflowignore
-mflow init                Initialize .mflow/ directory with default config
-mflow lock <path>         Acquire file lock (default 30s lease)
-  --duration <seconds>    Lock lease duration
-mflow unlock <path>       Release file lock (must be lock holder)
-  --force                 Admin override — release any lock
-mflow locks               List all active file locks
+```text
+mflow start [options]       Start sync daemon and join a room
+mflow stop                  Stop sync daemon and persist state
+mflow status [--watch]      Show peers, files, locks, and sync stats
+mflow pause                 Pause outgoing sync while continuing to receive
+mflow resume [--force]      Resume sync and apply buffered changes
+mflow lock <path>           Acquire a short file lock
+mflow unlock <path>         Release a file lock
+mflow locks                 List active file locks
+mflow ignore <pattern>      Add a pattern to .mflowignore
+mflow init                  Initialize .mflow config files
 ```
 
-### Examples
+Common start options:
 
 ```bash
-# Start with auto-generated room and secret
-mflow start
-# Output: Generated secret -- share with peers:
-#   a1b2c3d4e5f6...
-
-# Start with explicit room and secret
-mflow start --room my-team/feature-x --secret "correct horse battery staple"
-
-# Check who's connected
-mflow status
-
-# Temporarily stop syncing during a big refactor
-mflow pause
-# ... do work ...
-mflow resume
-
-# Exclude test output from sync
-mflow ignore "*.test.output"
-mflow ignore "coverage/"
+mflow start \
+  --room my-project/main \
+  --secret "$MFLOW_SECRET" \
+  --signaling wss://mflow-signal.obed0101.deno.net \
+  --transport relay
 ```
 
----
+`--transport relay` is the default. `--transport p2p` exists for direct WebRTC-style transport experiments, but the relay path is the public-ready default.
 
-## Configuration
+## Public relay limits
 
-### `.mflow/config.toml`
+The shared public relay is a free fair-use service intended for demos, onboarding, and small agent swarms. Current default limits are:
 
-Created automatically on first `mflow start` or manually via `mflow init`.
+| Limit | Default |
+|---|---:|
+| Peers per room | 4 |
+| Max WebSocket message | 65,536 bytes |
+| Messages per minute per IP | 120 |
+| Join attempts per minute per IP | 10 |
+| Rate-limit violations before disconnect | 3 |
+| Unauthenticated sockets per IP | 5 |
+| Unauthenticated sockets globally | 500 |
+| Active rooms | 200 |
+| Idle room TTL | 15 minutes |
+| Activity entries per room | 20 |
 
-```toml
-[daemon]
-name = ""                # Peer display name (default: hostname-PID)
-type = "auto"            # "agent" | "human" | "auto"
+Need more capacity, privacy, or reliability? Self-host the relay and set your own limits.
 
-[sync]
-signaling = "wss://mflow-signal.obed0101.deno.net"
-debounce_ms = 50                 # Batch rapid file saves
-max_file_size_bytes = 1048576    # 1MB -- files larger are skipped
-max_tracked_files = 5000         # Warn at 4000, hard limit at 5000
-unload_after_minutes = 5         # Unload idle CRDT docs from memory
+## Self-hosting
 
-[sync.ignore]
-patterns = [
-  "node_modules", ".env*", "*.lock",
-  "dist/", "build/", ".git/", ".mflow/"
-]
-
-[awareness]
-broadcast_interval_ms = 5000     # How often to broadcast peer activity
-share_current_file = true        # Show peers which file you're editing
-
-[transport]
-stun_servers = ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"]
-reconnect_max_delay_ms = 30000   # Max reconnect backoff
-```
-
-### `.mflowignore`
-
-Gitignore-style patterns for files to exclude from sync (in addition to `.gitignore`).
-
-```gitignore
-# Auto-generated from .gitignore on init
-node_modules/
-dist/
-.env*
-
-# Custom mflow ignores
-*.log
-tmp/
-```
-
-### File Exclusion Rules
-
-Files are excluded from sync if ANY of these apply:
-
-| Rule | Example |
-|------|---------|
-| Matches `.gitignore` | `node_modules/`, `dist/` |
-| Matches `.mflowignore` | Custom patterns |
-| Matches default patterns | `.git/`, `.mflow/`, `.agents/`, `.env*` |
-| File size > 1MB | Large binaries, data files |
-| Binary file detected | `.png`, `.wasm`, `.zip`, etc. (null bytes in first 8KB) |
-| Internal paths | `.git/*`, `.mflow/*` always blocked on remote writes |
-
----
-
-## Security
-
-### Encryption Model
-
-All file content is encrypted **before leaving your machine**. The signaling server and any network observer sees only encrypted bytes.
-
-```
-Secret: "my-shared-secret"
-  |
-  +-> SHA-256(secret) = authHash        -> sent to signaling for room auth
-  |                                        (server never sees the secret itself)
-  |
-  +-> HKDF(secret, salt=roomId,         -> AES-256-GCM encryption key
-       info="mflow-enc", 256 bits)         (derived locally, never transmitted)
-
-Every message:
-  Plaintext (CRDT update)
-  + Nonce (96-bit: peerId prefix + monotonic counter)
-  + AAD (roomId:fileId:peerId)
-  -> AES-256-GCM encrypt
-  -> Only ciphertext leaves your machine
-```
-
-### What the Signaling Server Sees
-
-| Data | Visible to Server? |
-|------|-------------------|
-| File contents | No -- encrypted |
-| File names | No -- encrypted inside payload |
-| Room ID | Yes -- needed for routing |
-| Secret hash | Yes -- SHA-256 hash for auth (not the secret) |
-| Peer names | Yes -- for peer discovery |
-| Peer IPs | Yes -- WebSocket connections |
-| Encrypted bytes | Yes -- but cannot decrypt them |
-
-### What the Signaling Server Cannot Do
-
-- Read your code (AES-256-GCM encrypted)
-- Decrypt messages (doesn't have the secret)
-- Modify messages without detection (GCM authentication tag)
-- Replay old messages (monotonic nonce counters)
-- Join your room (doesn't know the secret)
-- Store your data (all in-memory, no persistence)
-
-### Protections Against Malicious Peers
-
-A peer who knows the room secret is trusted to participate. However, Mflow still protects against:
-
-| Attack | Protection |
-|--------|-----------|
-| Path traversal (`../../etc/passwd`) | Path validation + `realpath()` symlink check |
-| Write to `.git/`, `.mflow/` | Internal path blocklist on remote writes |
-| Oversized files | 1MB file size limit enforced on remote writes |
-| File count flood | 5000 tracked files limit |
-| Memory exhaustion | Bounded pause buffer (1000 items / 50MB) |
-| Nonce forgery | Nonce prefix verified against sender identity |
-| Message replay | Strictly-increasing counter per peer |
-| Daemon crash via malformed data | Full try/catch on all frame parsing |
-
-### Signaling Server Hardening
-
-| Protection | Detail |
-|-----------|--------|
-| Rate limiting | 10 joins/min, 100 messages/min per IP |
-| Brute-force lockout | Exponential backoff after 3 failed auth attempts |
-| Message size limit | 64KB max WebSocket payload |
-| Connection exhaustion | 10s join timeout, 5 unauthenticated/IP, 500 global cap |
-| Duplicate peer rejection | Cannot hijack another peer's session |
-| IP trust | `X-Forwarded-For` only trusted when `TRUST_PROXY=true` |
-
-### Recommendations
-
-- **Always use auto-generated secrets** (32-byte random hex). Weak human-chosen secrets can be brute-forced offline.
-- **Self-host the signaling server** if you need maximum privacy (see below).
-- **Don't commit `.mflow/`** to git (auto-added to `.gitignore` by `mflow init`).
-
----
-
-## Transport Modes
-
-### Relay (default)
-
-Messages routed through the signaling server. E2E encrypted -- server is a dumb pipe.
+Self-hosting keeps the same CLI model: room + secret, no account required.
 
 ```bash
-mflow start --room my-room --secret my-secret
-# Uses wss://mflow-signal.obed0101.deno.net by default
+mflow start \
+  --room my-project/main \
+  --secret "$MFLOW_SECRET" \
+  --signaling ws://localhost:8787
 ```
 
-Pros: Works across NAT, firewalls, any network. Zero config.
-Cons: ~50-200ms added latency vs direct P2P.
+Guides:
 
-### P2P (WebRTC)
+- [Self-hosting overview](./docs/self-hosting.md)
+- [Deno Deploy](./docs/deno-deploy.md)
+- [Bun + Docker](./docs/bun-docker.md)
+- [Relay limits](./docs/limits.md)
 
-Direct peer-to-peer via werift (pure TypeScript WebRTC). Signaling server only used for initial handshake.
+## Security model
 
-```bash
-mflow start --room my-room --secret my-secret --transport p2p
-```
+mflow uses a room secret for room admission and local key derivation. The relay receives a SHA-256 auth hash for room join checks and forwards encrypted payloads. Use high-entropy secrets and share them out of band.
 
-Pros: Lower latency on LAN. Code never touches any server.
-Cons: May fail behind corporate firewalls or symmetric NAT.
+Read the full [security model](./docs/security-model.md).
 
----
+## Harness guides
 
-## Pause/Resume: How It Handles Multiple Agents + Humans
-
-When 3 AI agents and a human share a room, anyone can pause and resume at any time. Mflow handles this safely.
-
-### The Short Version
-
-Each pause creates a **reason** with a unique ID. Sync only resumes when **all reasons are cleared**. Nobody can accidentally undo someone else's pause.
-
-### Example: Human + 2 Agents
-
-```
-1. Agent A pauses (doing a multi-file refactor)
-   Active pauses: [ agent-a ]
-   Status: PAUSED
-
-2. Human pauses (about to git commit)
-   Active pauses: [ agent-a, human ]
-   Status: PAUSED
-
-3. Agent A finishes, resumes
-   Active pauses: [ human ]             ← agent-a's reason removed
-   Status: STILL PAUSED                 ← human's reason still active
-
-4. Agent B calls resume (doesn't know human is mid-commit)
-   Active pauses: [ human ]             ← nothing happens, agent B had no pause
-   Status: STILL PAUSED                 ← human is protected
-
-5. Human finishes git commit, resumes
-   Active pauses: [ ]                   ← all reasons cleared
-   Status: SYNCING                      ← sync resumes, buffered changes applied
-```
-
-Key point: **Agent B's resume in step 4 does nothing** because Agent B never paused. You can only remove your own pause, not someone else's.
-
-### Example: 5 Agents Working in Parallel
-
-```
-Agent A pauses:  pauses = { A }
-Agent B pauses:  pauses = { A, B }
-Agent C pauses:  pauses = { A, B, C }
-Agent B resumes: pauses = { A, C }       ← only B's reason removed
-Agent A resumes: pauses = { C }          ← only A's reason removed
-Agent C resumes: pauses = { }            ← all clear, sync resumes
-```
-
-No conflicts. No races. Each agent manages its own pause independently.
-
-### Who Can Override Whom?
-
-| Who | Can unpause |
-|-----|-------------|
-| Human (CLI) | Only their own pauses. Or `--force` to clear everything. |
-| AI Agent (MCP) | Only their own pauses. Cannot touch human or other agent pauses. |
-| Git (auto) | Only git-related pauses. Cannot touch human or agent pauses. |
-
-The human always has the final word via `mflow resume --force` (clears all pauses from all sources).
-
-### Why This Matters
-
-Without this model, a common disaster:
-
-```
-Human: mflow pause           ← preparing to git commit
-Agent: mflow_resume           ← doesn't know, just wants sync back
-       sync resumes!          ← files change during git commit
-       git index corrupted    ← disaster
-```
-
-With the pause-reason model, the agent's resume **does nothing** because it has no active pause to remove. The human's pause is untouchable until the human explicitly resumes.
-
----
-
-## File Locking: Preventing Same-File Collisions
-
-When two agents edit the **same file** simultaneously, CRDTs guarantee both peers converge to the same text -- but the merged result can be garbled code (duplicated imports, interleaved blocks). Mflow prevents this with 3 layers:
-
-### Layer 1: Propagation Gate (automatic, zero-config)
-
-The propagation gate is the core innovation. It converts dangerous **concurrent** merges into safe **sequential** merges -- automatically, invisibly, with zero configuration.
-
-**How it works:**
-
-Every mflow daemon tracks two signals per file:
-1. **Recent remote edits** -- "Did another peer send me an update for this file in the last 10 seconds?"
-2. **Awareness** -- "Is another peer currently editing this file?" (broadcast every 5s)
-
-If either signal is active when you make a local change, your update is **queued** instead of propagated. It sits in a local buffer until the other peer finishes. Then it propagates -- and because it's now sequential (not concurrent), Y.js merges it cleanly.
-
-```
-Without gate (dangerous):
-  Agent A edits server.ts  ──→  CRDT merge  ←──  Agent B edits server.ts
-  Result: interleaved garbage (both edits mixed character-by-character)
-
-With gate (safe):
-  Agent A edits server.ts  ──→  propagates immediately
-  Agent B edits server.ts  ──→  QUEUED (gate active: A edited recently)
-  Agent A finishes          ──→  10s pass, gate clears
-  Agent B's edit propagates ──→  applied ON TOP of A's version (sequential)
-  Result: clean merge (B's edit computed against A's final state)
-```
-
-**Why this works:** Y.js CRDTs produce garbage when two peers insert text at nearby positions simultaneously (character-level interleaving). But when edits are applied sequentially -- A's version lands first, then B's diff is computed against A's result -- the merge is clean. The gate forces this sequencing automatically.
-
-**What happens to queued updates:**
-- They are stored as raw Y.js updates in memory (not file snapshots)
-- The gate checks every 2 seconds if it can drain the queue
-- If the queue fills up (1000 items or 50MB), it force-drains -- data integrity is more important than collision prevention
-- No data is ever lost or silently dropped
-
-This happens automatically. No agent changes needed. Covers ~85% of collision scenarios.
-
-### Layer 2: File Locks (opt-in, for coordinated agents)
-
-Agents can explicitly lock files before editing:
-
-```bash
-# CLI
-mflow lock src/server.ts              # acquire (30s lease)
-# ... edit the file ...
-mflow unlock src/server.ts            # release
-
-# MCP (AI agents)
-mflow_lock({ path: "src/server.ts" })       # → { granted: true, expires: 30s }
-mflow_lock({ path: "src/server.ts" })       # → { granted: false, holder: "agent-a" }
-mflow_unlock({ path: "src/server.ts" })     # → released
-```
-
-Lock rules:
-- Leases auto-expire (default 30s, max 120s) -- no deadlocks
-- Only the lock holder can unlock (ownership verified)
-- `mflow unlock --force` (CLI only) overrides any lock (admin escape hatch)
-- While locked, other peers' edits to that file are queued (not lost, just delayed)
-- `mflow locks` shows all active locks
-
-### Layer 3: Syntax Guard (safety net)
-
-After every merge, mflow checks the result for obvious corruption:
-- Duplicate consecutive import statements
-- Unbalanced braces/brackets
-
-If detected, a `merge-warning` is emitted (visible in `mflow status`). The file is still written -- mflow warns but never silently reverts your work.
-
-### What Happens When...
-
-| Scenario | Result |
-|----------|--------|
-| 2 agents, different files | Normal sync, zero overhead |
-| 2 agents, same file, one finishes first | Gate queues the second, sequential merge (clean) |
-| 2 agents, same file, both use locks | Second agent told "locked", waits and retries |
-| Agent crashes while holding lock | Lock expires in 30s automatically |
-| Gate queue fills up (1000 items) | Force-drain: propagate all (data > collision prevention) |
-| Agent edits without lock while another has lock | Edit stays local, queued until lock releases |
-
----
-
-## MCP Server (AI Agent Integration)
-
-Mflow includes an MCP server that lets AI agents query sync status and coordinate edits.
-
-### Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `mflow_status` | Daemon state, peers, files tracked, ops/sec, merge warnings |
-| `mflow_health` | Quick health check |
-| `mflow_peers` | Connected peers with names and types |
-| `mflow_pause` | Pause outgoing sync |
-| `mflow_resume` | Resume sync |
-| `mflow_stop` | Graceful daemon shutdown |
-| `mflow_ignore` | Add ignore pattern at runtime |
-| `mflow_lock` | Acquire file lock (lease-based, auto-expiry) |
-| `mflow_unlock` | Release file lock (ownership verified) |
-| `mflow_locks` | List all active file locks |
-
-### Claude Code Integration
-
-Add to your `.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "mflow": {
-      "command": "bun",
-      "args": ["run", "/path/to/mflow/packages/mcp/src/index.ts", "--root", "/path/to/your/project"]
-    }
-  }
-}
-```
-
-Then Claude Code can call `mflow_status`, `mflow_peers`, etc. as native tools.
-
----
-
-## Self-Hosted Signaling
-
-If you don't want to use the public signaling server, run your own:
-
-### Docker
-
-```bash
-docker build -t mflow-signaling packages/signaling/
-docker run -p 8787:8787 mflow-signaling
-```
-
-### Direct (Bun)
-
-```bash
-PORT=8787 bun packages/signaling/src/index.ts
-```
-
-### Direct (Deno)
-
-```bash
-deno run --allow-net --allow-env packages/signaling/deno-deploy.ts
-```
-
-### Use Your Server
-
-```bash
-mflow start --signaling ws://your-server:8787 --room my-room --secret my-secret
-```
-
-Or set it in `.mflow/config.toml`:
-
-```toml
-[sync]
-signaling = "wss://your-server.com"
-```
-
-Health check: `GET /health` returns `{"status":"ok","rooms":0,"peers":0,"uptime":123,"memoryMB":40}`
-
-Resource usage: ~40-50MB RAM. Handles thousands of concurrent rooms on minimal hardware.
-
----
-
-## Hosting Costs
-
-The public signaling server runs on Deno Deploy's free tier:
-
-| Resource | Free Limit | Mflow Usage |
-|----------|-----------|-------------|
-| Requests/month | 1,000,000 | Low (WebSocket upgrades only) |
-| Bandwidth | 100 GB | Minimal (small JSON messages) |
-| CPU time | 15 hours/month | Minimal (relay is O(1) per message) |
-| Cost | **$0** | No credit card required |
-
-The signaling server is stateless -- rooms exist only in memory while peers are connected. No database, no storage, no persistence.
-
----
-
-## How CRDTs Prevent Conflicts
-
-Mflow uses Y.js, a battle-tested CRDT (Conflict-free Replicated Data Type) library.
-
-When two agents edit the same file simultaneously:
-
-```
-Agent A: adds "import { auth } from './auth';" at line 1
-Agent B: adds "import { db } from './db';" at line 1
-
-Traditional merge: CONFLICT -- both changed line 1
-CRDT merge: Both imports are preserved (deterministic order)
-```
-
-CRDTs guarantee **convergence** -- all peers end up with the same content, regardless of edit order or network delays. There is no "conflict resolution" because conflicts are mathematically impossible at the text level.
-
-**Important**: CRDTs guarantee text convergence, not semantic correctness. Two agents could both write valid code that together is broken. Mflow's awareness system shows who's editing what, so agents/developers can coordinate.
-
----
-
-## Limits
-
-| Resource | Limit |
-|----------|-------|
-| File size | 1 MB per file (configurable) |
-| Tracked files | 5,000 per project (configurable) |
-| Peers per room | 10 (signaling enforced) |
-| Message size | 64 KB per WebSocket frame |
-| CRDT doc memory | ~50-100 KB per active file |
-| Total daemon memory | < 500 MB for 1000 files + 5 peers |
-
----
+- [Codex](./docs/harnesses/codex.md)
+- [Claude Code](./docs/harnesses/claude-code.md)
+- [opencode](./docs/harnesses/opencode.md)
+- [Custom CLI or agent harness](./docs/harnesses/custom-cli.md)
 
 ## Development
 
 ```bash
-# Install dependencies
 bun install
-
-# Type check all packages
-bun run typecheck
-
-# Run all tests (127 tests)
+bunx tsc --noEmit
 bun test
-
-# Run specific test suite
-bun test tests/integration/crypto.test.ts
-bun test tests/integration/signaling.test.ts
-bun test tests/integration/edge-cases.test.ts
-
-# Start local signaling server
-bun run dev:signaling
-
-# Run CLI directly
-bun packages/cli/src/index.ts --help
-
-# Run MCP server
-bun packages/mcp/src/index.ts --root .
+scripts/check-public-release.sh
+npm pack --dry-run
 ```
 
----
+Package layout:
 
-## Roadmap
+```text
+packages/shared      Shared types, schemas, crypto, constants
+packages/daemon      File watcher, CRDT sync, IPC, transports
+packages/cli         mflow CLI and daemon launcher
+packages/signaling   Bun relay, Deno Deploy relay, landing/dashboard
+packages/mcp         MCP integration package
+```
 
-- [ ] npm publish (`npx mflow start`)
-- [ ] VS Code extension
-- [ ] Web dashboard (rooms, peers, sync stats)
-- [ ] Smart file locking (soft/hard locks)
-- [ ] Branch awareness warnings
-- [ ] Per-session encryption keys
-- [ ] TURN relay fallback for P2P
+## Release and contribution
 
----
+- License: MIT
+- Security policy: [SECURITY.md](./SECURITY.md)
+- Contribution guide: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- Release process: [docs/release-process.md](./docs/release-process.md)
+- Hosted auth roadmap: [docs/hosted-auth.md](./docs/hosted-auth.md)
 
-## License
+Before publishing, re-check npm package names and inspect `npm pack --dry-run`. Do not publish from a dirty or unreviewed worktree.
 
-MIT
+## Hosted account/device login roadmap
+
+Future hosted mflow may add GitHub OAuth with CLI device authorization:
+
+```text
+mflow login
+Open: https://github.com/login/device
+Code: ABCD-EFGH
+Waiting for approval...
+```
+
+The hosted dashboard can be gated with GitHub device sign-in by setting `MFLOW_REQUIRE_DASHBOARD_AUTH=true` and configuring a GitHub App client ID. This protects dashboard/API room status only. The sync protocol still uses room + secret. Self-hosted mflow can remain usable without hosted accounts. A future self-hosted admin mode may support local email/password through explicit environment configuration.

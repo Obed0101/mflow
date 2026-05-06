@@ -9,6 +9,19 @@ const yellow = (s: string): string => `\x1b[33m${s}\x1b[0m`;
 const red = (s: string): string => `\x1b[31m${s}\x1b[0m`;
 const cyan = (s: string): string => `\x1b[36m${s}\x1b[0m`;
 
+const colorize = (fn: (s: string) => string, s: string): string => {
+  if (process.env["NO_COLOR"] || process.stdout.isTTY === false) return s;
+  return fn(s);
+};
+
+const BANNER = [
+  "           ___  __",
+  " _ __ ___ / _|| | _____      __",
+  "| '_ ` _ \\| |_ | |/ _ \\ \\ /\\ / /",
+  "| | | | | |  _|| | (_) |\\ V  V /",
+  "|_| |_| |_|_|  |_|\\___/  \\_/\\_/",
+].join("\n");
+
 // ─── State Colors ───────────────────────────────────────────
 
 const STATE_COLORS: Record<DaemonState, (s: string) => string> = {
@@ -43,10 +56,10 @@ function formatMemory(mb: number): string {
 export function displayStatus(status: DaemonStatus): void {
   const stateColor = STATE_COLORS[status.state] ?? dim;
 
-  console.log(bold("mflow") + dim(" — real-time code sync"));
+  console.log(colorize(bold, "mflow") + colorize(dim, " — real-time code sync"));
   console.log("");
-  console.log(`  State:    ${stateColor(status.state)}`);
-  console.log(`  Room:     ${status.roomId ?? dim("none")}`);
+  console.log(`  State:    ${colorize(stateColor, status.state)}`);
+  console.log(`  Room:     ${status.roomId ?? colorize(dim, "none")}`);
   console.log(`  Peers:    ${status.peers.length}`);
   console.log(`  Files:    ${status.trackedFiles} tracked, ${status.activeYDocs} active`);
   console.log(`  Ops/s:    ${status.opsPerSecond}`);
@@ -70,43 +83,98 @@ export function displayStatus(status: DaemonStatus): void {
 }
 
 export function displayPeers(peers: PeerInfo[]): void {
-  console.log(bold("  Peers:"));
+  console.log(colorize(bold, "  Peers:"));
   for (const peer of peers) {
-    const typeLabel = peer.peerType === "agent" ? cyan("agent") : green("human");
-    console.log(`    ${dim("●")} ${peer.peerName} ${dim("(")}${typeLabel}${dim(")")}`);
+    const typeLabel = peer.peerType === "agent" ? colorize(cyan, "agent") : colorize(green, "human");
+    console.log(`    ${colorize(dim, "●")} ${peer.peerName} ${colorize(dim, "(")}${typeLabel}${colorize(dim, ")")}`);
   }
 }
 
 export function displaySuccess(message: string): void {
-  console.log(`${green("✓")} ${message}`);
+  console.log(`${colorize(green, "✓")} ${message}`);
 }
 
 export function displayError(message: string): void {
-  console.error(`${red("✗")} ${message}`);
+  const marker = process.env["NO_COLOR"] || process.stderr.isTTY === false ? "✗" : red("✗");
+  console.error(`${marker} ${message}`);
 }
 
 export function displayWarning(message: string): void {
-  console.log(`${yellow("!")} ${message}`);
+  console.log(`${colorize(yellow, "!")} ${message}`);
 }
 
 export function displayInfo(message: string): void {
-  console.log(`${dim("›")} ${message}`);
+  console.log(`${colorize(dim, "›")} ${message}`);
 }
 
 export function displayLocks(locks: FileLock[]): void {
-  console.log(bold("  Locks:"));
+  console.log(colorize(bold, "  Locks:"));
   const now = Date.now();
   for (const lock of locks) {
     const remaining = Math.max(0, Math.ceil((lock.expiresAt - now) / 1000));
     console.log(
-      `    ${yellow("⊘")} ${lock.path} ${dim("—")} ${lock.holderName} ${dim(`(${remaining}s remaining)`)}`,
+      `    ${colorize(yellow, "⊘")} ${lock.path} ${colorize(dim, "—")} ${lock.holderName} ${colorize(dim, `(${remaining}s remaining)`)}`,
     );
   }
 }
 
 export function displayMergeWarnings(warnings: MergeWarning[]): void {
-  console.log(bold("  Merge Warnings:"));
+  console.log(colorize(bold, "  Merge Warnings:"));
   for (const w of warnings) {
-    console.log(`    ${red("⚠")} ${w.path} ${dim("—")} ${w.type}: ${w.detail}`);
+    console.log(`    ${colorize(red, "⚠")} ${w.path} ${colorize(dim, "—")} ${w.type}: ${w.detail}`);
   }
+}
+
+export function getBanner(): string {
+  return BANNER.trimStart();
+}
+
+export function displayNoArgsHelp(): void {
+  console.log(getBanner());
+  console.log("");
+  console.log("Real-time code sync for AI agent teams.");
+  console.log("");
+  console.log("Start here:");
+  console.log("  mflow start                    Start sync in this repo");
+  console.log("  mflow status                   See peers, files, locks");
+  console.log("  mflow lock src/file.ts         Lock a hot file before editing");
+  console.log("");
+  console.log("Docs: https://github.com/Obed0101/mflow#readme");
+}
+
+export interface StartSummary {
+  pid: number;
+  projectRoot: string;
+  room: string;
+  signaling: string;
+  transport: string;
+  generatedSecret: boolean;
+}
+
+export function classifyRelay(signaling: string): string {
+  if (signaling.includes("mflow-signal.obed0101.deno.net")) {
+    return "public fair-use relay";
+  }
+  return "custom/self-hosted relay";
+}
+
+export function displayStartSummary(summary: StartSummary): void {
+  displaySuccess(`Daemon started (PID: ${summary.pid})`);
+  console.log("");
+  console.log("Sync session");
+  console.log(`  Project:   ${summary.projectRoot}`);
+  console.log(`  Room:      ${summary.room}`);
+  console.log(`  Relay:     ${summary.signaling} (${classifyRelay(summary.signaling)})`);
+  console.log(`  Mode:      ${summary.transport}`);
+  console.log("");
+  displayWarning("Treat the room secret like a password. Anyone with the room and secret can join.");
+  if (summary.generatedSecret) {
+    displayInfo("A new secret was generated for this room; share it only out-of-band with trusted peers.");
+  }
+  console.log("");
+  console.log("Next peer:");
+  console.log(`  mflow start --room ${summary.room} --secret <shared-secret> --signaling ${summary.signaling}`);
+  console.log("");
+  console.log("Monitor:");
+  console.log("  mflow status --watch");
 }

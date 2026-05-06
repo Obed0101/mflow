@@ -30,6 +30,11 @@ import {
   SignalingSignalSchema,
 } from "@mflow/shared";
 import { relaySignal } from "../../packages/signaling/src/relay.js";
+import {
+  DEFAULT_SIGNALING_LIMITS,
+  loadSignalingLimits,
+  type SignalingLimits,
+} from "../../packages/signaling/src/limits.js";
 import type {
   SignalingJoined,
   SignalingPeerJoined,
@@ -113,6 +118,12 @@ function startTestServer(): Server {
   }
 
   function handleMessage(ws: ServerWebSocket<PeerContext>, raw: string | Buffer): void {
+    const rawLen = typeof raw === "string" ? raw.length : raw.byteLength;
+    if (rawLen > DEFAULT_SIGNALING_LIMITS.maxWebSocketMessageBytes) {
+      sendError(ws, "MESSAGE_TOO_LARGE", `Message exceeds ${DEFAULT_SIGNALING_LIMITS.maxWebSocketMessageBytes} bytes`);
+      return;
+    }
+
     const ip = ws.data.ip;
     const msgCheck = rateLimiter.checkMessage(ip);
     if (!msgCheck.allowed) {
@@ -188,6 +199,7 @@ function startTestServer(): Server {
     },
 
     websocket: {
+      maxPayloadLength: DEFAULT_SIGNALING_LIMITS.maxWebSocketMessageBytes * 2,
       open(_ws) {},
       message(ws, raw) {
         handleMessage(ws, raw);
@@ -284,6 +296,24 @@ async function closeWs(ws: WebSocket): Promise<void> {
   const closed = waitForClose(ws, 1000).catch(() => {});
   ws.close();
   await closed;
+}
+
+function makeRoomLimits(overrides: Partial<SignalingLimits>): SignalingLimits {
+  return { ...DEFAULT_SIGNALING_LIMITS, ...overrides };
+}
+
+function fakeServerWebSocket(peerId = ""): ServerWebSocket<PeerContext> {
+  return {
+    data: {
+      peerId,
+      peerName: peerId,
+      peerType: "human",
+      roomId: null,
+      ip: "127.0.0.1",
+    },
+    close() {},
+    send() {},
+  } as unknown as ServerWebSocket<PeerContext>;
 }
 
 // ─── Fixed valid hash ────────────────────────────────────────────────────────
@@ -765,6 +795,118 @@ describe("Peer Limit", () => {
       expect(response.message).toContain(String(MAX_PEERS_PER_ROOM));
     } finally {
       await Promise.all(clients.map(closeWs));
+    }
+  });
+});
+
+// ─── Public Relay Limit Config ───────────────────────────────────────────────
+
+describe("Public relay limit config", () => {
+  test("defaults match the initial hosted fair-use limits", () => {
+    expect(DEFAULT_SIGNALING_LIMITS.maxPeersPerRoom).toBe(4);
+    expect(DEFAULT_SIGNALING_LIMITS.maxWebSocketMessageBytes).toBe(65_536);
+    expect(DEFAULT_SIGNALING_LIMITS.messagesPerMinute).toBe(120);
+    expect(DEFAULT_SIGNALING_LIMITS.joinAttemptsPerMinute).toBe(10);
+    expect(DEFAULT_SIGNALING_LIMITS.maxUnauthenticatedSocketsPerIp).toBe(5);
+    expect(DEFAULT_SIGNALING_LIMITS.maxUnauthenticatedSocketsGlobal).toBe(500);
+    expect(DEFAULT_SIGNALING_LIMITS.maxActiveRooms).toBe(200);
+    expect(DEFAULT_SIGNALING_LIMITS.idleRoomTtlMs).toBe(15 * 60_000);
+    expect(DEFAULT_SIGNALING_LIMITS.maxActivityEntriesPerRoom).toBe(20);
+  });
+
+  test("environment overrides accept only positive safe integers", () => {
+    const limits = loadSignalingLimits({
+      MFLOW_MAX_PEERS_PER_ROOM: "8",
+      MFLOW_MAX_WS_MESSAGE_BYTES: "131072",
+      MFLOW_MESSAGES_PER_MINUTE: "240",
+      MFLOW_JOIN_ATTEMPTS_PER_MINUTE: "0",
+      MFLOW_MAX_ACTIVE_ROOMS: "-1",
+      MFLOW_IDLE_ROOM_TTL_MS: "nope",
+    });
+
+    expect(limits.maxPeersPerRoom).toBe(8);
+    expect(limits.maxWebSocketMessageBytes).toBe(131_072);
+    expect(limits.messagesPerMinute).toBe(240);
+    expect(limits.joinAttemptsPerMinute).toBe(DEFAULT_SIGNALING_LIMITS.joinAttemptsPerMinute);
+    expect(limits.maxActiveRooms).toBe(DEFAULT_SIGNALING_LIMITS.maxActiveRooms);
+    expect(limits.idleRoomTtlMs).toBe(DEFAULT_SIGNALING_LIMITS.idleRoomTtlMs);
+  });
+
+  test("RoomManager enforces max active rooms before creating a new room", async () => {
+    const rooms = new RoomManager(makeRoomLimits({ maxActiveRooms: 1 }));
+    const first = fakeServerWebSocket("first");
+    const second = fakeServerWebSocket("second");
+
+    const joined = rooms.join(first, "room-a", VALID_HASH, "first", "First", "human");
+    expect(joined.ok).toBe(true);
+
+    const rejected = rooms.join(second, "room-b", VALID_HASH, "second", "Second", "human");
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      expect(rejected.code).toBe("ROOM_FULL");
+      expect(rejected.message).toContain("active rooms");
+    }
+  });
+
+  test("RoomManager cleanup removes idle rooms and closes peers", async () => {
+    let closeCount = 0;
+    const rooms = new RoomManager(makeRoomLimits({ idleRoomTtlMs: 1 }));
+    const ws = {
+      ...fakeServerWebSocket("idle-peer"),
+      close() {
+        closeCount++;
+      },
+    } as unknown as ServerWebSocket<PeerContext>;
+
+    const result = rooms.join(ws, "idle-room", VALID_HASH, "idle-peer", "Idle", "human");
+    expect(result.ok).toBe(true);
+
+    const removed = rooms.cleanupIdleRooms(Date.now() + 2);
+    expect(removed).toBe(1);
+    expect(closeCount).toBe(1);
+    expect(rooms.getRoomCount()).toBe(0);
+  });
+
+  test("RoomManager caps activity entries per room", async () => {
+    const rooms = new RoomManager(makeRoomLimits({ maxActivityEntriesPerRoom: 2 }));
+    const ws = fakeServerWebSocket("activity-peer");
+    const result = rooms.join(ws, "activity-room", VALID_HASH, "activity-peer", "Activity", "human");
+    expect(result.ok).toBe(true);
+
+    for (const file of ["a.ts", "b.ts", "c.ts"]) {
+      rooms.addActivity("activity-room", {
+        timestamp: Date.now(),
+        peerId: "activity-peer",
+        peerName: "Activity",
+        peerType: "human",
+        action: "synced",
+        file,
+      });
+    }
+
+    const [room] = rooms.getRoomDetailsBySecretHash(VALID_HASH);
+    expect(room.activity.map((entry) => entry.file)).toEqual(["b.ts", "c.ts"]);
+  });
+});
+
+describe("Message size limit", () => {
+  test("oversized WebSocket messages return MESSAGE_TOO_LARGE before parsing", async () => {
+    const server = startTestServer();
+    const port = server.port;
+    const ws = await connect(port);
+
+    try {
+      const response = (await sendAndReceive(ws, {
+        type: "join",
+        roomId: "x".repeat(DEFAULT_SIGNALING_LIMITS.maxWebSocketMessageBytes),
+      })) as SignalingError;
+
+      expect(response.type).toBe("error");
+      expect(response.code).toBe("MESSAGE_TOO_LARGE");
+      expect(response.message).toContain(String(DEFAULT_SIGNALING_LIMITS.maxWebSocketMessageBytes));
+    } finally {
+      await closeWs(ws);
+      server.stop(true);
     }
   });
 });

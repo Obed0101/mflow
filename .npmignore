@@ -1,0 +1,28 @@
+# Local/runtime state
+.mflow/
+.agents/
+.claude/
+.mcp.json
+.mflowignore
+CLAUDE.md
+
+# Build output and caches
+dist/
+**/dist/
+*.tsbuildinfo
+*.bun-build
+.bun-build/
+coverage/
+node_modules/
+
+# Temp and machine-local files
+*.tmp
+*.temp
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pid
+*.sock
+*.ystate

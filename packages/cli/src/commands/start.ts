@@ -1,13 +1,13 @@
 import { spawn } from "node:child_process";
-import { readFile, writeFile, access } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
+  DEFAULT_SIGNALING_URL,
   MFLOW_PID_FILE,
-  MFLOW_CONFIG_FILE,
 } from "@mflow/shared";
 import { isDaemonRunning, sendIPC } from "../ipc-client.js";
-import { displaySuccess, displayError, displayInfo, displayWarning } from "../display.js";
+import { displayError, displayInfo, displayStartSummary, displayWarning } from "../display.js";
 import { ensureMflowDir } from "./init.js";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -48,16 +48,18 @@ export async function startCommand(
   // Determine room and secret
   const room = options.room ?? await deriveRoomId(projectRoot);
   let secret = options.secret ?? "";
+  const generatedSecret = !secret;
 
-  if (!secret) {
+  if (generatedSecret) {
     secret = randomBytes(32).toString("hex");
     console.log("");
-    displayInfo(`Generated secret — share with peers:`);
+    displayInfo("Generated secret — share with peers:");
     console.log(`  ${secret}`);
+    displayWarning("This secret grants room access. Do not commit it or paste it into public logs.");
     console.log("");
   }
 
-  const signaling = options.signaling ?? "";
+  const signaling = options.signaling ?? DEFAULT_SIGNALING_URL;
   const transport = options.transport ?? "relay";
 
   // Spawn daemon as detached background process
@@ -68,7 +70,7 @@ export async function startCommand(
 
   // Build args
   const args = ["run", daemonEntry, "--root", projectRoot, "--room", room, "--secret", secret];
-  if (signaling) args.push("--signaling", signaling);
+  args.push("--signaling", signaling);
   if (transport !== "relay") args.push("--transport", transport);
 
   // Use Bun to run the daemon entry point
@@ -85,7 +87,7 @@ export async function startCommand(
         MFLOW_ROOM: room,
         MFLOW_SECRET: secret,
         MFLOW_TRANSPORT: transport,
-        ...(signaling ? { MFLOW_SIGNALING: signaling } : {}),
+        MFLOW_SIGNALING: signaling,
       },
     },
   );
@@ -96,9 +98,14 @@ export async function startCommand(
     await writeFile(pidPath, String(daemonProc.pid), "utf-8");
     daemonProc.unref();
 
-    displaySuccess(`Daemon started (PID: ${daemonProc.pid})`);
-    displayInfo(`Room: ${room}`);
-    displayInfo(`Watching: ${projectRoot}`);
+    displayStartSummary({
+      pid: daemonProc.pid,
+      projectRoot,
+      room,
+      signaling,
+      transport,
+      generatedSecret,
+    });
   } else {
     displayError("Failed to start daemon process");
     process.exitCode = 1;

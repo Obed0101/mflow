@@ -12,7 +12,7 @@ import { initCommand } from "./commands/init.js";
 import { lockCommand } from "./commands/lock.js";
 import { unlockCommand } from "./commands/unlock.js";
 import { locksCommand } from "./commands/locks.js";
-import { displayError } from "./display.js";
+import { displayError, displayNoArgsHelp, getBanner } from "./display.js";
 
 // ─── CLI Entry Point ────────────────────────────────────────
 
@@ -21,7 +21,33 @@ const program = new Command();
 program
   .name("mflow")
   .description("Real-time P2P code sync for AI agents and developers")
-  .version("0.1.0");
+  .version("0.1.0")
+  .addHelpText("beforeAll", `${getBanner()}\n`)
+  .addHelpText("afterAll", `
+Command groups:
+  Sync lifecycle:
+    mflow start     Start sync daemon and join a room
+    mflow stop      Stop sync daemon and persist state
+    mflow status    Show daemon status, peers, and sync stats
+
+  Safety controls:
+    mflow pause     Pause outgoing sync
+    mflow resume    Resume sync and apply buffered changes
+    mflow lock      Acquire a file lock
+    mflow unlock    Release a file lock
+    mflow locks     List active file locks
+
+  Setup:
+    mflow init      Initialize .mflow/ directory
+    mflow ignore    Add an ignore pattern
+
+Examples:
+  mflow start --room project-x --secret "$MFLOW_SECRET"
+  mflow status --watch
+  mflow lock src/file.ts --duration 2m
+
+Docs: https://github.com/Obed0101/mflow#readme
+`);
 
 // Resolve project root: walk up to find .git or use cwd
 function getProjectRoot(): string {
@@ -178,4 +204,8 @@ program
 
 // ── Parse ──
 
-program.parse();
+if (process.argv.slice(2).length === 0) {
+  displayNoArgsHelp();
+} else {
+  program.parse();
+}
