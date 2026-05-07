@@ -26,7 +26,7 @@ export async function setupCommand(projectRoot: string): Promise<void> {
 
   const rl = createInterface({ input, output });
   try {
-    const answers = await collectSetupAnswers(rl);
+    const answers = await collectSetupAnswers(rl, projectRoot);
     await writeSetupFiles(projectRoot, answers);
 
     displaySuccess("mflow setup complete");
@@ -49,6 +49,7 @@ export async function setupCommand(projectRoot: string): Promise<void> {
 
 async function collectSetupAnswers(
   rl: ReturnType<typeof createInterface>,
+  projectRoot: string,
 ): Promise<SetupAnswers> {
   const roomDefault = basename(projectRoot) || "mflow-room";
   console.log("Room names identify who can meet in the same sync session. Peers must use the same room and secret.");

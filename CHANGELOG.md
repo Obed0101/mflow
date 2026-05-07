@@ -4,6 +4,14 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.4] - 2026-05-07
+
+Hotfix release for the setup flow.
+
+### Fixed
+
+- Fixed `mflow setup` crashing with `projectRoot is not defined`.
+
 ## [0.1.3] - 2026-05-07
 
 CLI polish patch.

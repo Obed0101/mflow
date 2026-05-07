@@ -1,7 +1,7 @@
 {
   "name": "mflow-cli",
   "private": false,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Sync local worktrees so AI agents and humans stop overwriting each other",
   "homepage": "https://github.com/Obed0101/mflow#readme",
   "bugs": {
