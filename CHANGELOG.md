@@ -4,6 +4,20 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.5] - 2026-05-07
+
+Daemon startup and setup UX patch.
+
+### Fixed
+
+- Fixed `mflow start` writing a PID file before the daemon finished booting, which caused self-inflicted stale/duplicate daemon failures and left hosted relay rooms at `0`.
+- Fixed `mflow start` to wait for real daemon readiness before printing success, and to surface `.mflow/daemon.log` context when startup fails.
+
+### Changed
+
+- `mflow setup` now uses clearer numbered choices for hosted vs self-hosted relay and yes/no decisions.
+- `mflow setup` now explains that the hosted dashboard API key comes from `/settings`, is optional, and can be skipped for normal room+secret sync.
+
 ## [0.1.4] - 2026-05-07
 
 Hotfix release for the setup flow.

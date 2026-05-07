@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { openSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   DEFAULT_SIGNALING_URL,
   MFLOW_CONFIG_FILE,
-  MFLOW_PID_FILE,
+  MFLOW_DIR,
 } from "../../../shared/src/index.js";
 import { isDaemonRunning, sendIPC } from "../ipc-client.js";
 import { displayError, displayInfo, displayStartSummary, displayWarning } from "../display.js";
@@ -71,18 +72,21 @@ export async function startCommand(
   );
 
   // Build args
-  const args = ["run", daemonEntry, "--root", projectRoot, "--room", room, "--secret", secret];
+  const args = [daemonEntry, "--root", projectRoot, "--room", room, "--secret", secret];
   args.push("--signaling", signaling);
   if (transport !== "relay") args.push("--transport", transport);
 
-  // Use Bun to run the daemon entry point
-  // The daemon module is @mflow/daemon — we launch it via a minimal entry script
+  const logPath = join(projectRoot, MFLOW_DIR, "daemon.log");
+  const stdoutFd = openSync(logPath, "a");
+  const stderrFd = openSync(logPath, "a");
+
+  // Use Bun to run the daemon entry point.
   const daemonProc = spawn(
     "bun",
     args,
     {
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", stdoutFd, stderrFd],
       env: {
         ...process.env,
         MFLOW_PROJECT_ROOT: projectRoot,
@@ -96,9 +100,14 @@ export async function startCommand(
 
   // Write PID file
   if (daemonProc.pid) {
-    const pidPath = join(projectRoot, MFLOW_PID_FILE);
-    await writeFile(pidPath, String(daemonProc.pid), "utf-8");
     daemonProc.unref();
+
+    const ready = await waitForDaemonReady(projectRoot, daemonProc.pid, logPath);
+    if (!ready.ok) {
+      displayError(ready.message);
+      process.exitCode = 1;
+      return;
+    }
 
     displayStartSummary({
       pid: daemonProc.pid,
@@ -169,4 +178,62 @@ function readTomlString(content: string, key: string): string | undefined {
   const match = content.match(new RegExp(`^${key}\\s*=\\s*"((?:\\\\.|[^"])*)"`, "m"));
   if (!match) return undefined;
   return match[1].replaceAll('\\"', '"').replaceAll("\\\\", "\\");
+}
+
+async function waitForDaemonReady(
+  projectRoot: string,
+  pid: number,
+  logPath: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const deadline = Date.now() + 4_000;
+
+  while (Date.now() < deadline) {
+    if (await isDaemonRunning(projectRoot)) {
+      return { ok: true };
+    }
+
+    if (!isProcessAlive(pid)) {
+      const logTail = await readLogTail(logPath);
+      return {
+        ok: false,
+        message: logTail
+          ? `Daemon exited during startup.\n${logTail}`
+          : "Daemon exited during startup. Check .mflow/daemon.log for details.",
+      };
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  const logTail = await readLogTail(logPath);
+  return {
+    ok: false,
+    message: logTail
+      ? `Daemon did not become ready in time.\n${logTail}`
+      : "Daemon did not become ready in time. Check .mflow/daemon.log for details.",
+  };
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readLogTail(logPath: string): Promise<string> {
+  try {
+    const content = await readFile(logPath, "utf-8");
+    const tail = content
+      .trim()
+      .split("\n")
+      .slice(-10)
+      .join("\n")
+      .trim();
+    return tail ? `Recent daemon log:\n${tail}` : "";
+  } catch {
+    return "";
+  }
 }

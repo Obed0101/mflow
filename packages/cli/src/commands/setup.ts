@@ -54,24 +54,53 @@ async function collectSetupAnswers(
   const roomDefault = basename(projectRoot) || "mflow-room";
   console.log("Room names identify who can meet in the same sync session. Peers must use the same room and secret.");
   const room = normalizeAnswer(await rl.question(`Room name (${roomDefault}): `), roomDefault);
-  const relayMode = normalizeAnswer(
-    await rl.question("Relay: hosted free tier with fair-use limits, or self-hosted URL? (hosted/self-hosted): "),
-    "hosted",
-  ).toLowerCase();
+  console.log("");
+  const relayMode = await chooseOption(rl, {
+    label: "Relay",
+    options: [
+      {
+        key: "1",
+        value: "hosted",
+        title: "Hosted free tier",
+        description: "Fastest path. Shared public relay with fair-use limits.",
+      },
+      {
+        key: "2",
+        value: "self-hosted",
+        title: "Self-hosted URL",
+        description: "Use your own ws:// or wss:// relay endpoint.",
+      },
+    ],
+    defaultValue: "hosted",
+  });
   const signaling = relayMode.startsWith("self")
     ? normalizeAnswer(await rl.question("Self-hosted relay URL (ws:// or wss://): "), DEFAULT_SIGNALING_URL)
     : DEFAULT_SIGNALING_URL;
 
-  const generateSecret = normalizeAnswer(await rl.question("Generate a new room secret? (Y/n): "), "y").toLowerCase() !== "n";
+  console.log("");
+  const generateSecret = await confirmChoice(
+    rl,
+    "Room secret",
+    "Generate a new high-entropy room secret?",
+    true,
+  );
   const roomSecret = generateSecret
     ? randomBytes(32).toString("hex")
     : await questionHidden(rl, "Paste room secret (input hidden): ");
 
-  const storeRoomSecret = normalizeAnswer(
-    await rl.question("Store room secret in local .mflow/config.toml? This is convenient but less portable. (y/N): "),
-    "n",
-  ).toLowerCase() === "y";
+  console.log("");
+  const storeRoomSecret = await confirmChoice(
+    rl,
+    "Local storage",
+    "Store room secret in local .mflow/config.toml? Convenient, but less portable.",
+    false,
+  );
 
+  console.log("");
+  console.log("Optional hosted API key:");
+  console.log("- Create it yourself in the hosted dashboard Settings page.");
+  console.log("- Paste it here only if you want this worktree to keep a local copy for future hosted workflows.");
+  console.log("- Skip with Enter if you only want room + secret sync.");
   const apiKey = await questionHidden(
     rl,
     "Paste hosted dashboard API key from /settings (optional, input hidden): ",
@@ -148,6 +177,53 @@ function escapeToml(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
+interface ChoiceOption {
+  key: string;
+  value: string;
+  title: string;
+  description: string;
+}
+
+async function chooseOption(
+  rl: ReturnType<typeof createInterface>,
+  args: {
+    label: string;
+    options: ChoiceOption[];
+    defaultValue: string;
+  },
+): Promise<string> {
+  console.log(`${args.label}:`);
+  for (const option of args.options) {
+    const marker = option.value === args.defaultValue ? " (default)" : "";
+    console.log(`  ${option.key}) ${option.title}${marker}`);
+    console.log(`     ${option.description}`);
+  }
+
+  const raw = normalizeAnswer(await rl.question(`Choose ${args.label.toLowerCase()} [${args.options[0]?.key}/${args.options[1]?.key}]: `), "");
+  const normalized = raw.toLowerCase();
+  const byKey = args.options.find((option) => option.key === normalized);
+  if (byKey) return byKey.value;
+  const byValue = args.options.find((option) => option.value === normalized);
+  if (byValue) return byValue.value;
+  return args.defaultValue;
+}
+
+async function confirmChoice(
+  rl: ReturnType<typeof createInterface>,
+  label: string,
+  question: string,
+  defaultValue: boolean,
+): Promise<boolean> {
+  console.log(`${label}:`);
+  console.log(`  1) Yes${defaultValue ? " (default)" : ""}`);
+  console.log("  2) No" + (!defaultValue ? " (default)" : ""));
+  const raw = normalizeAnswer(await rl.question(`${question} [1/2]: `), "");
+  const normalized = raw.toLowerCase();
+  if (normalized === "1" || normalized === "y" || normalized === "yes") return true;
+  if (normalized === "2" || normalized === "n" || normalized === "no") return false;
+  return defaultValue;
+}
+
 async function questionHidden(
   rl: ReturnType<typeof createInterface>,
   prompt: string,
@@ -156,6 +232,7 @@ async function questionHidden(
 
   const mutableOutput = output as typeof output & { muted?: boolean };
   const originalWrite = mutableOutput.write.bind(mutableOutput);
+  originalWrite(prompt);
   mutableOutput.muted = true;
   mutableOutput.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding, cb?: (err?: Error) => void) => {
     if (!mutableOutput.muted) return originalWrite(chunk, encoding, cb);
@@ -165,7 +242,7 @@ async function questionHidden(
   }) as typeof output.write;
 
   try {
-    const answer = await rl.question(prompt);
+    const answer = await rl.question("");
     return answer.trim();
   } finally {
     mutableOutput.muted = false;
