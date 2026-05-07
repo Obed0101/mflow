@@ -575,6 +575,8 @@ export function getDashboardHtml(): string {
       var authRequired = false;
       var authenticated = false;
       var authPollTimer = null;
+      var treesModulePromise = null;
+      var activeTreeRenderToken = 0;
 
       function sha256(str) {
         return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function(buf) {
@@ -652,6 +654,13 @@ export function getDashboardHtml(): string {
         return Math.floor(diff / 3600) + 'h';
       }
 
+      function loadTreesModule() {
+        if (!treesModulePromise) {
+          treesModulePromise = import('https://esm.sh/@pierre/trees@1.0.0-beta.3?target=es2022');
+        }
+        return treesModulePromise;
+      }
+
       function buildChangedFiles(entries) {
         var latest = {};
         entries.forEach(function(entry) {
@@ -661,34 +670,42 @@ export function getDashboardHtml(): string {
         return Object.values(latest).sort(function(a, b) { return b.timestamp - a.timestamp; });
       }
 
-      function buildTreeLines(files) {
-        var root = {};
-        files.forEach(function(file) {
-          var parts = file.split('/').filter(Boolean);
-          var node = root;
-          for (var i = 0; i < parts.length; i++) {
-            var part = parts[i];
-            if (!node[part]) node[part] = { __children: {}, __leaf: i === parts.length - 1 };
-            if (i === parts.length - 1) {
-              node[part].__leaf = true;
-            } else {
-              node = node[part].__children;
-            }
-          }
-        });
-
-        var lines = [];
-        function walk(children, depth) {
-          Object.keys(children).sort().forEach(function(key) {
-            var item = children[key];
-            var indent = new Array(depth + 1).join('&nbsp;&nbsp;&nbsp;');
-            var icon = item.__leaf ? '•' : '▾';
-            lines.push('<div style="font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + indent + icon + ' ' + esc(key) + '</div>');
-            if (!item.__leaf) walk(item.__children, depth + 1);
-          });
+      function renderTreeView(files) {
+        var treeCont = document.getElementById('file-tree');
+        if (!treeCont) return;
+        var sortedFiles = Array.from(new Set(files.filter(Boolean))).sort();
+        if (!sortedFiles.length) {
+          treeCont.innerHTML = '<div style="color:var(--text-muted);">No file tree yet</div>';
+          return;
         }
-        walk(root, 0);
-        return lines;
+
+        var renderToken = ++activeTreeRenderToken;
+        treeCont.innerHTML = '<div style="color:var(--text-muted);">Loading tree…</div>';
+
+        loadTreesModule()
+          .then(function(mod) {
+            if (renderToken !== activeTreeRenderToken) return;
+            var preparedInput = mod.preparePresortedFileTreeInput(sortedFiles);
+            var tree = new mod.FileTree({
+              preparedInput: preparedInput,
+              id: 'mflow-room-tree',
+              search: true,
+              initialExpandedPaths: sortedFiles
+                .map(function(file) {
+                  var idx = file.lastIndexOf('/');
+                  return idx > 0 ? file.slice(0, idx) : '';
+                })
+                .filter(Boolean)
+                .slice(0, 6),
+              initialVisibleRowCount: Math.min(Math.max(sortedFiles.length + 2, 8), 14),
+            });
+            treeCont.innerHTML = '';
+            treeCont.style.height = '320px';
+            tree.render({ fileTreeContainer: treeCont });
+          })
+          .catch(function(err) {
+            treeCont.innerHTML = '<div style="color:var(--red);">Tree renderer failed: ' + esc(err && err.message ? err.message : String(err)) + '</div>';
+          });
       }
 
       function updateUI() {
@@ -790,10 +807,7 @@ export function getDashboardHtml(): string {
                     return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:var(--mono);"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(entry.file) + '</span><span class="activity-action action-' + entry.action + '">' + entry.action + '</span></div>';
                   }).join('')
                 : '<div style="color:var(--text-muted);">No changed files yet</div>';
-
-              var treeCont = document.getElementById('file-tree');
-              var treeLines = buildTreeLines(changedFiles.map(function(entry) { return entry.file; }));
-              treeCont.innerHTML = treeLines.length ? treeLines.join('') : '<div style="color:var(--text-muted);">No file tree yet</div>';
+              renderTreeView(changedFiles.map(function(entry) { return entry.file; }));
             } else if (mode === 'room') {
                if (hadActiveRoom) {
                  hadActiveRoom = false;
@@ -812,6 +826,7 @@ export function getDashboardHtml(): string {
                document.getElementById('activity-feed').innerHTML = '<div style="color:var(--text-muted); padding: 20px 0;">No recent activity</div>';
                document.getElementById('changed-files').innerHTML = '<div style="color:var(--text-muted);">No changed files yet</div>';
                document.getElementById('file-tree').innerHTML = '<div style="color:var(--text-muted);">No file tree yet</div>';
+               document.getElementById('file-tree').style.height = '';
             }
           })
           .catch(function(err) {
