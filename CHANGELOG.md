@@ -13,6 +13,8 @@ Dashboard room-state and streamer safety patch.
 - Dashboard now validates secret before entering room mode; invalid/empty room no longer appears as a successful room connect.
 - Dashboard now writes `?room=<roomId>` immediately after a successful connect and stores session per-room.
 - If a connected room disappears (for example after `mflow stop`), dashboard now exits room mode back to home with a `Room disconnected` message.
+- `mflow start` once again prints dashboard/monitor/stop/secret hints when the daemon is already running instead of dropping straight to a bare status snapshot.
+- Daemon sync state now keeps polling transport connectivity so stale relay disconnects are reflected as reconnecting/connecting instead of staying stuck on `syncing`.
 
 ### Changed
 

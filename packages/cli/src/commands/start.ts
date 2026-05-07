@@ -9,7 +9,7 @@ import {
   MFLOW_DIR,
 } from "../../../shared/src/index.js";
 import { isDaemonRunning, sendIPC } from "../ipc-client.js";
-import { displayError, displayInfo, displayStartSummary, displayWarning } from "../display.js";
+import { displayError, displayInfo, displayRelayHints, displayStartSummary, displayWarning } from "../display.js";
 import { ensureMflowDir } from "./init.js";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -38,6 +38,13 @@ export async function startCommand(
       if (response.type === "status") {
         const { displayStatus } = await import("../display.js");
         displayStatus(response.data);
+        const config = await readStartConfig(projectRoot);
+        const relay = firstNonEmpty(options.signaling, config.signaling) ?? DEFAULT_SIGNALING_URL;
+        displayRelayHints({
+          relayUrl: relay,
+          roomId: response.data.roomId,
+          includeMonitor: true,
+        });
       }
     } catch {
       displayInfo("Use 'mflow status' to check daemon state");

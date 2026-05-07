@@ -120,6 +120,36 @@ export function displayInfo(message: string): void {
   console.log(`${colorize(dim, "›")} ${message}`);
 }
 
+export interface RelayHintOptions {
+  relayUrl: string;
+  roomId?: string | null;
+  includeMonitor?: boolean;
+}
+
+export function displayRelayHints(options: RelayHintOptions): void {
+  const dashboardUrl = options.relayUrl.replace(/^wss?:\/\//, "https://").replace(/\/$/, "") + "/dashboard";
+
+  console.log("");
+  console.log("Hosted dashboard:");
+  console.log(`  ${dashboardUrl}`);
+  if (options.roomId) {
+    console.log(`  Paste the same room secret to monitor room "${options.roomId}".`);
+  } else {
+    console.log("  Paste the same room secret to monitor this room.");
+  }
+  console.log("");
+  if (options.includeMonitor) {
+    console.log("Monitor:");
+    console.log("  mflow status --watch");
+    console.log("");
+  }
+  console.log("Stop:");
+  console.log("  mflow stop");
+  console.log("");
+  console.log("Secret:");
+  console.log("  mflow secret --copy");
+}
+
 export function displayLocks(locks: FileLock[]): void {
   console.log(colorize(bold, "  Locks:"));
   const now = Date.now();
@@ -195,13 +225,9 @@ export function displayStartSummary(summary: StartSummary): void {
   console.log("");
   console.log("Next peer:");
   console.log(`  mflow start --room ${summary.room} --secret <shared-secret> --signaling ${summary.signaling}`);
-  console.log("");
-  console.log("Monitor:");
-  console.log("  mflow status --watch");
-  console.log("");
-  console.log("Stop:");
-  console.log("  mflow stop");
-  console.log("");
-  console.log("Secret:");
-  console.log("  mflow secret --copy");
+  displayRelayHints({
+    relayUrl: summary.signaling,
+    roomId: summary.room,
+    includeMonitor: true,
+  });
 }

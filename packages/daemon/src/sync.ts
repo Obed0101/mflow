@@ -144,6 +144,7 @@ export class SyncOrchestrator extends EventEmitter {
   private readonly gateQueue = new Map<string, Array<{ update: Uint8Array; timestamp: number }>>();
   private gateQueueBytes = 0;
   private gateDrainTimer: ReturnType<typeof setInterval> | null = null;
+  private connectionPollTimer: ReturnType<typeof setInterval> | null = null;
 
   // Syntax guard (Layer 3) — active merge warnings
   private readonly mergeWarnings = new Map<string, MergeWarning>();
@@ -521,19 +522,37 @@ export class SyncOrchestrator extends EventEmitter {
       this.setState("syncing");
     }
 
-    // Also watch for transport connection state changes
-    // Poll every 500ms until connected (transport doesn't emit events)
-    const connectionPoll = setInterval(() => {
-      if (this._state === "stopping") {
-        clearInterval(connectionPoll);
-        return;
-      }
-      const connState = this.transport.getConnectionState();
-      if (connState === "connected" && (this._state === "scanning" || this._state === "connecting")) {
-        this.setState("syncing");
-        clearInterval(connectionPoll);
-      }
+    // Also watch for transport connection state changes continuously.
+    // The relay can restart or move traffic between instances, so one successful
+    // join is not enough to treat the daemon as permanently "syncing".
+    this.connectionPollTimer = setInterval(() => {
+      if (this._state === "stopping") return;
+      this.syncConnectionState();
     }, 500);
+  }
+
+  private syncConnectionState(): void {
+    const connState = this.transport.getConnectionState();
+    if (connState === "connected") {
+      this.setState("syncing");
+      return;
+    }
+    if (connState === "reconnecting") {
+      this.setState("reconnecting");
+      return;
+    }
+    if (connState === "connecting") {
+      if (this._state !== "scanning") this.setState("connecting");
+      return;
+    }
+
+    if (this._state === "syncing" || this._state === "reconnecting") {
+      this.setState("reconnecting");
+      return;
+    }
+    if (this._state !== "scanning") {
+      this.setState("connecting");
+    }
   }
 
   /**
@@ -856,6 +875,11 @@ export class SyncOrchestrator extends EventEmitter {
     if (this.gateDrainTimer) {
       clearInterval(this.gateDrainTimer);
       this.gateDrainTimer = null;
+    }
+
+    if (this.connectionPollTimer) {
+      clearInterval(this.connectionPollTimer);
+      this.connectionPollTimer = null;
     }
 
     // Stop awareness

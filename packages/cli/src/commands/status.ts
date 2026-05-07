@@ -1,5 +1,5 @@
 import { sendIPC, isDaemonRunning } from "../ipc-client.js";
-import { displayStatus, displayError, displayInfo } from "../display.js";
+import { displayStatus, displayError, displayInfo, displayRelayHints } from "../display.js";
 import { Dashboard } from "../dashboard.js";
 import { join } from "node:path";
 import { MFLOW_CONFIG_FILE } from "../../../shared/src/index.js";
@@ -57,12 +57,10 @@ export async function statusCommand(
 async function displayDashboardHint(projectRoot: string, roomId: string | null): Promise<void> {
   const relay = await readConfiguredRelay(projectRoot);
   if (!relay) return;
-  console.log("");
-  displayInfo(`Hosted dashboard: ${relay.replace(/^wss?:\/\//, "https://").replace(/\/$/, "")}/dashboard`);
-  if (roomId) {
-    displayInfo(`Paste the same room secret to monitor room "${roomId}".`);
-  }
-  displayInfo("Stop the local daemon with: mflow stop");
+  displayRelayHints({
+    relayUrl: relay,
+    roomId,
+  });
 }
 
 async function readConfiguredRelay(projectRoot: string): Promise<string | null> {
