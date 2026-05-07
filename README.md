@@ -13,41 +13,6 @@ Package name: `mflow-cli`. Installed binary: `mflow`.
 
 ## Quick start
 
-```bash
-export MFLOW_SECRET="$(openssl rand -hex 32)"
-mflow start --room my-project/main --secret "$MFLOW_SECRET"
-```
-
-Join another worktree or machine with the same room and secret:
-
-```bash
-mflow start --room my-project/main --secret "$MFLOW_SECRET"
-```
-
-Check sync:
-
-```bash
-mflow status
-mflow status --watch
-```
-
-Pause around git operations:
-
-```bash
-mflow pause
-git add .
-git commit -m "your change"
-mflow resume
-```
-
-Stop:
-
-```bash
-mflow stop
-```
-
-## First-time local setup
-
 If you do not want to handcraft room names, secrets, and relay URLs, start here:
 
 ```bash
