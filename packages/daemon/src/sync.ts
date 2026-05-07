@@ -11,14 +11,14 @@ import type {
   MflowConfig,
   PauseReason,
   PauseSource,
-} from "@mflow/shared";
+} from "../../shared/src/index.js";
 import {
   GATE_WINDOW_MS,
   GATE_DRAIN_INTERVAL_MS,
   MAX_FILE_SIZE_BYTES,
   MAX_TRACKED_FILES,
-} from "@mflow/shared";
-import { shouldSync, createDefaultFilter, type IgnoreFilter } from "@mflow/shared";
+} from "../../shared/src/index.js";
+import { shouldSync, createDefaultFilter, type IgnoreFilter } from "../../shared/src/index.js";
 import { CRDTManager } from "./crdt.js";
 import { FileWatcher } from "./watcher.js";
 import { ManifestManager } from "./manifest.js";

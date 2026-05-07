@@ -71,14 +71,14 @@ When self-hosting:
 
 ## Future hosted auth
 
-A future hosted product may add GitHub OAuth with device-code login and account/team scoped tokens. That is not implemented today. It must not become required for self-hosted usage.
+A future hosted product may add GitHub OAuth with account/team scoped tokens. That is not implemented today. It must not become required for self-hosted usage.
 
 The future hosted flow requires at minimum:
 
 - hosted auth API
-- GitHub OAuth app with Device Flow enabled
+- GitHub OAuth app callback configuration
 - browser approval UI
-- device code expiry and polling
+- OAuth state validation and callback handling
 - secure token storage
 - logout/revocation
 - hosted relay/account integration
@@ -86,4 +86,8 @@ The future hosted flow requires at minimum:
 
 Future self-hosted admin auth may support local email/password through explicit environment configuration. It should remain off by default and separate from the public managed hosted auth path.
 
-For the hosted public relay, `MFLOW_REQUIRE_DASHBOARD_AUTH=true` gates dashboard/API room status behind GitHub device sign-in. This does not replace room secrets for sync peers.
+For the hosted public relay, `MFLOW_REQUIRE_DASHBOARD_AUTH=true` gates dashboard/API room status behind GitHub OAuth sign-in. This does not replace room secrets for sync peers.
+
+Hosted API keys are additive for dashboard/CLI/admin access. They do not replace the room + secret protocol used by sync peers. API key plaintext is shown once, never persisted server-side, and validation rejects revoked or expired keys. Production key creation must be disabled unless `MFLOW_API_KEY_PEPPER` is configured.
+
+Hosted browser sessions are stored in signed HttpOnly cookies. The browser keeps the session across reloads and server isolate restarts, while the server rejects tampered or expired cookies using `MFLOW_SESSION_SECRET`.

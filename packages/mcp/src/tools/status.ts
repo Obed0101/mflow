@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sendIPC, isDaemonRunning } from "../ipc-client.js";
-import type { DaemonStatus, PeerInfo } from "@mflow/shared";
+import type { DaemonStatus, PeerInfo } from "../../../shared/src/index.js";
 
 export function registerStatusTools(server: McpServer, projectRoot: string): void {
   server.tool(

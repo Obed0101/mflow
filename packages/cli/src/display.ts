@@ -1,4 +1,4 @@
-import type { DaemonStatus, PeerInfo, DaemonState, FileLock, MergeWarning } from "@mflow/shared";
+import type { DaemonStatus, PeerInfo, DaemonState, FileLock, MergeWarning } from "../../shared/src/index.js";
 
 // ─── ANSI Colors ────────────────────────────────────────────
 

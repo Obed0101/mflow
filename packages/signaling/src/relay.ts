@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import type { SignalingSignal, SignalingRelay } from "@mflow/shared";
+import type { SignalingSignal, SignalingRelay } from "../../shared/src/index.js";
 import type { PeerContext, RoomManager } from "./rooms.js";
 
 // ─── Relay ──────────────────────────────────────────────────

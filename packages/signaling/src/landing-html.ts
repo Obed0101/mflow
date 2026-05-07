@@ -5,255 +5,460 @@ export function getLandingHtml(): string {
   return LANDING_HTML;
 }
 
-const LANDING_HTML = `
-<!DOCTYPE html>
-<html class="dark" lang="en">
+const LANDING_HTML = `<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>mflow | Open-source real-time code sync for AI agent teams</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-  tailwind.config = {
-    darkMode: "class",
-    theme: {
-      extend: {
-        colors: {
-          primary: "#10b981",
-          "background-light": "#f6f8f7",
-          "background-dark": "#0a0a0a",
-          "neutral-dark": "#171717",
-          "text-main": "#fafafa",
-          "text-muted": "#737373"
-        },
-        fontFamily: {
-          display: ["Inter", "sans-serif"],
-          mono: ["JetBrains Mono", "monospace"]
-        },
-        borderRadius: {
-          DEFAULT: "0.25rem",
-          lg: "0.5rem",
-          xl: "0.75rem",
-          full: "9999px"
-        }
-      }
-    }
-  }
-</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>mflow — real-time code sync for AI agent teams</title>
+<meta name="description" content="Open-source file sync between worktrees while AI agents edit. Room + secret access, self-hostable, MIT licensed."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0c;
+  --surface:#141416;
+  --surface-2:#1a1a1e;
+  --border:rgba(255,255,255,.08);
+  --border-hover:rgba(255,255,255,.16);
+  --text:#e8e8ed;
+  --text-2:#a0a0ab;
+  --text-3:#5a5a66;
+  --accent:#34d399;
+  --accent-dim:rgba(52,211,153,.12);
+  --accent-glow:rgba(52,211,153,.06);
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sans:'Inter',-apple-system,sans-serif;
+}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--sans);font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit;text-decoration:none}
+.w{max-width:1080px;margin:0 auto;padding:0 32px}
+
+/* ── Ambient glow ─────────────────────────── */
+.glow{
+  position:fixed;top:-400px;left:50%;transform:translateX(-50%);
+  width:900px;height:900px;pointer-events:none;z-index:0;
+  background:radial-gradient(circle,var(--accent-glow) 0%,transparent 60%);
+  opacity:.7;
+}
+
+/* ── Nav ──────────────────────────────────── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(10,10,12,.85);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+.nav-inner{
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  height:56px;
+}
+.nav-brand{font-size:16px;font-weight:700;letter-spacing:-.02em;justify-self:start}
+.nav-center{display:flex;align-items:center;gap:28px;justify-self:center}
+.nav-center a{font-size:13px;color:var(--text-2);font-weight:500;transition:color .15s}
+.nav-center a:hover{color:var(--text)}
+.nav-right{justify-self:end;display:flex;align-items:center;gap:10px}
+.nav-dashboard{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:13px;font-weight:700;color:#000;
+  padding:8px 16px;border-radius:8px;
+  background:#fff;
+  transition:transform .15s,opacity .15s;
+}
+.nav-dashboard:hover{transform:translateY(-1px);opacity:.92}
+.nav-gh{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:13px;font-weight:600;color:var(--text);
+  padding:6px 14px;border-radius:6px;
+  border:1px solid var(--border);transition:border-color .15s,background .15s;
+}
+.nav-gh:hover{border-color:var(--border-hover);background:var(--surface)}
+.nav-gh svg{width:16px;height:16px;fill:currentColor}
+
+/* ── Hero ─────────────────────────────────── */
+.hero{padding:140px 0 100px;text-align:center;position:relative;z-index:1}
+.hero-badge{
+  display:inline-block;font-size:12px;font-weight:600;
+  color:var(--accent);letter-spacing:.04em;
+  padding:5px 14px;border-radius:100px;
+  border:1px solid rgba(52,211,153,.25);background:var(--accent-dim);
+  margin-bottom:28px;
+}
+.hero h1{
+  font-size:clamp(38px,5.5vw,60px);font-weight:800;
+  letter-spacing:-.045em;line-height:1.08;margin-bottom:20px;
+  color:#fff;
+}
+.hero .sub{
+  font-size:18px;color:var(--text-2);max-width:540px;
+  margin:0 auto 36px;line-height:1.55;
+}
+.hero-btns{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.btn-p{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:11px 24px;border-radius:8px;font-size:14px;font-weight:600;
+  background:#fff;color:#000;transition:opacity .15s;
+}
+.btn-p:hover{opacity:.88}
+.btn-s{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:11px 24px;border-radius:8px;font-size:14px;font-weight:600;
+  border:1px solid var(--border);color:var(--text);
+  transition:border-color .15s,background .15s;
+}
+.btn-s:hover{border-color:var(--border-hover);background:var(--surface)}
+
+/* ── Terminal ─────────────────────────────── */
+.term-wrap{max-width:640px;margin:56px auto 0}
+.term{
+  background:#0f0f11;border:1px solid var(--border);
+  border-radius:10px;overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.term-bar{
+  display:flex;align-items:center;gap:7px;
+  padding:11px 16px;border-bottom:1px solid var(--border);
+}
+.term-dot{width:11px;height:11px;border-radius:50%}
+.term-dot:nth-child(1){background:#ff5f57}
+.term-dot:nth-child(2){background:#febc2e}
+.term-dot:nth-child(3){background:#28c840}
+.term-label{margin-left:auto;font-size:11px;color:var(--text-3);font-family:var(--mono)}
+.term pre{
+  padding:20px;font-family:var(--mono);font-size:13px;
+  line-height:1.75;color:var(--text-2);overflow-x:auto;
+}
+.term .p{color:var(--accent)}
+.term .c{color:#fff}
+.term .g{color:var(--accent)}
+.term .d{color:var(--text-3)}
+
+/* ── Section ──────────────────────────────── */
+section{padding:100px 0;position:relative;z-index:1}
+.s-label{
+  font-size:12px;font-weight:700;color:var(--accent);
+  text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;
+}
+.s-title{font-size:30px;font-weight:700;letter-spacing:-.03em;margin-bottom:14px;color:#fff}
+.s-desc{color:var(--text-2);max-width:520px;margin-bottom:40px;font-size:16px;line-height:1.6}
+.s-center{text-align:center}
+.s-center .s-desc{margin-left:auto;margin-right:auto}
+
+/* ── Feature grid (How it works) ──────────── */
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-radius:14px;overflow:hidden}
+.feat{background:var(--surface);padding:36px 28px}
+.feat-icon{
+  width:40px;height:40px;border-radius:10px;margin-bottom:18px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent-dim);color:var(--accent);
+}
+.feat-icon svg{width:20px;height:20px}
+.feat h3{font-size:16px;font-weight:700;margin-bottom:8px;color:#fff}
+.feat p{font-size:14px;color:var(--text-2);line-height:1.55}
+
+/* ── Access model ─────────────────────────── */
+.access-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;
+}
+.access-top{padding:40px 36px 32px}
+.access-steps{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+  background:var(--border);
+}
+.access-step{background:var(--surface);padding:24px}
+.access-step .num{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px}
+.access-step strong{display:block;font-size:14px;margin-bottom:4px;color:#fff}
+.access-step span{font-size:13px;color:var(--text-2)}
+.access-note{
+  padding:20px 36px;border-top:1px solid var(--border);
+  font-size:13px;color:var(--text-2);
+  background:var(--accent-dim);
+}
+.access-note strong{color:var(--text);font-weight:600}
+
+/* ── Limits ───────────────────────────────── */
+.limits-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-radius:14px;overflow:hidden}
+.limit{background:var(--surface);padding:28px 24px}
+.limit-val{font-size:28px;font-weight:800;color:#fff;font-family:var(--mono);line-height:1.1}
+.limit-name{font-size:14px;font-weight:600;margin:6px 0 4px;color:var(--text)}
+.limit-desc{font-size:13px;color:var(--text-3)}
+
+/* ── Dashboard promo ──────────────────────── */
+.promo{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;
+  display:grid;grid-template-columns:1fr 1fr;
+}
+.promo-text{padding:48px 40px;display:flex;flex-direction:column;justify-content:center}
+.promo-text h2{font-size:26px;font-weight:700;margin-bottom:14px;color:#fff;letter-spacing:-.02em}
+.promo-text p{font-size:15px;color:var(--text-2);margin-bottom:8px;line-height:1.55}
+.promo-path{font-family:var(--mono);font-size:13px;color:var(--text-3);margin-bottom:24px}
+.promo-visual{
+  background:linear-gradient(135deg,var(--surface-2),rgba(52,211,153,.05));
+  padding:40px;display:flex;align-items:center;justify-content:center;
+  border-left:1px solid var(--border);
+}
+.promo-mock{
+  width:100%;background:var(--bg);border:1px solid var(--border);
+  border-radius:10px;padding:24px;font-family:var(--mono);font-size:12px;
+  line-height:2;color:var(--text-2);
+}
+.promo-mock .hl{color:var(--accent)}
+
+/* ── Quick start ──────────────────────────── */
+.qs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.qs-step .qs-num{
+  font-size:11px;font-weight:700;color:var(--accent);
+  text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;
+}
+.qs-code{
+  padding:16px;background:var(--surface);
+  border:1px solid var(--border);border-radius:8px;
+  font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--text);
+}
+.qs-code .cmt{color:var(--text-3)}
+
+/* ── Extras ───────────────────────────────── */
+.extras{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-radius:14px;overflow:hidden}
+.extra{background:var(--surface);padding:28px 24px}
+.extra h4{font-size:15px;font-weight:700;margin-bottom:6px;color:#fff}
+.extra p{font-size:14px;color:var(--text-2);line-height:1.5}
+
+/* ── Footer ───────────────────────────────── */
+footer{border-top:1px solid var(--border);padding:64px 0 40px;position:relative;z-index:1}
+.ftr-grid{display:flex;justify-content:space-between;gap:48px;margin-bottom:40px}
+.ftr-brand-col{max-width:240px}
+.ftr-brand{font-size:18px;font-weight:700;margin-bottom:10px}
+.ftr-tagline{font-size:13px;color:var(--text-2);line-height:1.5}
+.ftr-links{display:flex;gap:48px}
+.ftr-col-title{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.ftr-col a,.ftr-col span{display:block;font-size:13px;color:var(--text-2);margin-bottom:8px;transition:color .15s}
+.ftr-col a:hover{color:var(--accent)}
+.ftr-bottom{padding-top:24px;border-top:1px solid var(--border);font-size:13px;color:var(--text-3)}
+
+/* ── Responsive ───────────────────────────── */
+@media(max-width:768px){
+  .nav-inner{display:flex;justify-content:space-between}
+  .nav-center{display:none}
+  .hero{padding:110px 0 60px}
+  .feat-grid,.limits-grid,.qs-grid,.extras,.access-steps{grid-template-columns:1fr}
+  .promo{grid-template-columns:1fr}
+  .promo-visual{border-left:none;border-top:1px solid var(--border)}
+  .ftr-grid{flex-direction:column;gap:32px}
+  .ftr-links{flex-wrap:wrap;gap:32px}
+  section{padding:64px 0}
+}
+</style>
 </head>
-<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-text-main antialiased selection:bg-primary/30">
-<header class="fixed top-0 w-full z-50 border-b border-white/5 bg-background-dark/80 backdrop-blur-md">
-  <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-    <a class="flex items-center gap-2" href="#top" aria-label="mflow home">
-      <span class="text-xl font-bold tracking-tight text-text-main">mflow</span>
-    </a>
-    <nav class="hidden md:flex items-center gap-8">
-      <a class="text-sm font-medium text-text-muted hover:text-primary transition-colors" href="https://github.com/Obed0101/mflow">GitHub</a>
-      <a class="text-sm font-medium text-text-muted hover:text-primary transition-colors" href="#quickstart">Install</a>
-      <a class="text-sm font-medium text-text-muted hover:text-primary transition-colors" href="/dashboard">Monitor</a>
-      <a class="text-sm font-medium text-text-muted hover:text-primary transition-colors" href="#access">Access</a>
-      <a class="text-sm font-medium text-text-muted hover:text-primary transition-colors" href="#limits">Limits</a>
-    </nav>
-    <a class="bg-primary hover:bg-primary/90 text-background-dark px-4 py-2 rounded-lg text-sm font-bold transition-all" href="/dashboard">
-      Open Dashboard
-    </a>
+<body>
+<div class="glow"></div>
+
+<nav>
+  <div class="w nav-inner">
+    <a href="/" class="nav-brand">mflow</a>
+    <div class="nav-center">
+      <a href="#how">How it works</a>
+      <a href="#access">Access</a>
+      <a href="#limits">Limits</a>
+      <a href="#quickstart">Quick Start</a>
+    </div>
+    <div class="nav-right">
+      <a href="/dashboard" class="nav-dashboard">Dashboard</a>
+      <a href="https://github.com/Obed0101/mflow" class="nav-gh"><svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+    </div>
   </div>
-</header>
-<main id="top" class="pt-32 pb-20">
-<section class="max-w-7xl mx-auto px-6 mb-28">
-  <div class="grid lg:grid-cols-2 gap-16 items-center">
-    <div class="flex flex-col gap-8">
-      <div class="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
-        MIT licensed core · self-hostable · public relay is fair-use
-      </div>
-      <h1 class="text-5xl md:text-7xl font-black tracking-tighter text-text-main leading-[1.06]">
-        Real-time code sync for AI agent teams
-      </h1>
-      <p class="text-lg md:text-xl text-text-muted leading-relaxed max-w-xl">
-        Sync working files between multiple worktrees or machines while agents edit. No account required. Bring a room name and a strong secret.
-      </p>
-      <div class="flex flex-wrap gap-4">
-        <a class="bg-primary hover:bg-primary/90 text-background-dark px-8 py-4 rounded-xl text-base font-bold transition-all shadow-lg shadow-primary/10" href="/dashboard">
-          Open Dashboard
-        </a>
-        <a class="border border-white/10 hover:border-primary/50 hover:bg-primary/5 text-text-main px-8 py-4 rounded-xl text-base font-bold transition-all" href="#quickstart">
-          Install CLI
-        </a>
-        <a class="border border-white/10 hover:border-primary/50 hover:bg-primary/5 text-text-main px-8 py-4 rounded-xl text-base font-bold transition-all" href="https://github.com/Obed0101/mflow">
-          View on GitHub
-        </a>
+</nav>
+
+<main>
+
+<div class="w">
+  <div class="hero">
+    <div class="hero-badge">Open source · MIT licensed · self-hostable</div>
+    <h1>Real-time file sync<br/>for AI agent teams</h1>
+    <p class="sub">Sync working files across worktrees while agents edit in parallel. No account needed — just a room name and a strong secret.</p>
+    <div class="hero-btns">
+      <a class="btn-p" href="/dashboard">Open Dashboard</a>
+      <a class="btn-s" href="#quickstart">Install CLI</a>
+      <a class="btn-s" href="https://github.com/Obed0101/mflow" style="gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+    </div>
+
+    <div class="term-wrap">
+      <div class="term">
+        <div class="term-bar">
+          <div class="term-dot"></div>
+          <div class="term-dot"></div>
+          <div class="term-dot"></div>
+          <span class="term-label">bash</span>
+        </div>
+        <pre><span class="p">$</span> <span class="c">npm i -g mflow-sdk</span>
+<span class="p">$</span> <span class="c">mflow start --room my-project --secret "$MFLOW_SECRET"</span>
+
+<span class="g">✓ Connected to public relay (fair-use: 4 peers/room)</span>
+  <span class="d">↑ src/auth.ts synced → 3 peers</span>
+  <span class="d">! Treat the room secret like a password</span></pre>
       </div>
     </div>
-    <div class="relative">
-      <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-transparent blur-2xl opacity-50"></div>
-      <div class="relative bg-neutral-dark border border-white/10 rounded-xl overflow-hidden shadow-2xl">
-        <div class="flex items-center gap-1.5 px-4 py-3 border-b border-white/5 bg-white/5">
-          <div class="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
-          <div class="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
-          <div class="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50"></div>
-          <span class="ml-2 text-xs font-mono text-text-muted">bash — mflow</span>
-        </div>
-        <div class="p-6 font-mono text-sm leading-relaxed space-y-1">
-          <p class="text-text-main"><span class="text-primary">$</span> npm i -g mflow-sdk</p>
-          <p class="text-text-main"><span class="text-primary">$</span> mflow start --room my-project --secret "$MFLOW_SECRET"</p>
-          <p class="text-primary">✓ Connected to public relay (fair-use: 4 peers/room)</p>
-          <p class="text-text-muted">↑ src/auth.ts synced → 3 peers</p>
-          <p class="text-text-muted">! Treat the room secret like a password</p>
-          <div class="h-4 w-2 bg-primary inline-block animate-pulse ml-1"></div>
-        </div>
+  </div>
+</div>
+
+<!-- How it works -->
+<section id="how">
+  <div class="w">
+    <div class="s-label">How it works</div>
+    <h2 class="s-title">File sync, not chat sync</h2>
+    <p class="s-desc">Mflow propagates file changes between peers. It does not sync chat history, tool logs, or agent memory.</p>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg></div>
+        <h3>Sync</h3>
+        <p>File changes propagate between peers through encrypted room traffic.</p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+        <h3>Encrypt</h3>
+        <p>Room secrets derive encryption keys. The relay should not be treated as trusted storage.</p>
+      </div>
+      <div class="feat">
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
+        <h3>Coordinate</h3>
+        <p>Pause/resume and file locks help avoid conflicts during git operations or hot-file edits.</p>
       </div>
     </div>
   </div>
 </section>
 
-<section id="access" class="max-w-7xl mx-auto px-6 mb-28">
-  <div class="bg-neutral-dark border border-white/5 rounded-3xl p-8 md:p-12">
-    <div class="grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-start">
-      <div>
-        <p class="text-sm font-bold text-primary uppercase tracking-wider mb-3">Access today</p>
-        <h2 class="text-3xl font-bold tracking-tight mb-4">Access is room + secret based</h2>
-        <p class="text-text-muted text-lg leading-relaxed mb-6">
-          There is no login or register flow in this OSS release. The dashboard asks for your room secret, hashes it in the browser, and only uses the hash to load room-scoped status. The secret itself is not sent by the dashboard.
-        </p>
-        <div class="grid md:grid-cols-3 gap-4 text-sm">
-          <div class="rounded-xl border border-white/10 bg-background-dark/60 p-4">
-            <div class="font-bold text-text-main mb-1">1. Start a room</div>
-            <div class="text-text-muted">Run the CLI with a room and strong secret.</div>
-          </div>
-          <div class="rounded-xl border border-white/10 bg-background-dark/60 p-4">
-            <div class="font-bold text-text-main mb-1">2. Share secret</div>
-            <div class="text-text-muted">Give it only to trusted peers out-of-band.</div>
-          </div>
-          <div class="rounded-xl border border-white/10 bg-background-dark/60 p-4">
-            <div class="font-bold text-text-main mb-1">3. Monitor</div>
-            <div class="text-text-muted">Open /dashboard and enter the same secret.</div>
-          </div>
-        </div>
+<!-- Access Model -->
+<section id="access">
+  <div class="w">
+    <div class="access-card">
+      <div class="access-top">
+        <div class="s-label">Access model</div>
+        <h2 class="s-title">Room + secret based</h2>
+        <p style="color:var(--text-2);font-size:15px;line-height:1.6;max-width:560px">No login or register flow in the OSS release. The dashboard hashes your room secret in the browser and only sends the hash. The plaintext secret never leaves your machine.</p>
       </div>
-      <div class="rounded-2xl border border-primary/20 bg-primary/5 p-6">
-        <h3 class="font-bold text-text-main mb-3">Login/register status</h3>
-        <p class="text-sm text-text-muted leading-relaxed">
-          The hosted dashboard can require GitHub device sign-in before showing room status. Sync peers still join with room + secret. Self-hosted deployments can remain accountless.
-        </p>
-        <button class="mt-5 inline-flex rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-text-muted cursor-not-allowed opacity-70" type="button" disabled>
-          Login/register planned
-        </button>
+      <div class="access-steps">
+        <div class="access-step"><div class="num">Step 1</div><strong>Start a room</strong><span>Run the CLI with a room name and a strong secret.</span></div>
+        <div class="access-step"><div class="num">Step 2</div><strong>Share the secret</strong><span>Give it only to trusted peers, out-of-band.</span></div>
+        <div class="access-step"><div class="num">Step 3</div><strong>Monitor</strong><span>Open /dashboard and enter the same secret.</span></div>
       </div>
+      <div class="access-note"><strong>Hosted relay auth ·</strong> The hosted dashboard can require GitHub device sign-in before showing room status. Sync peers still join with room + secret. Self-hosted deployments can keep auth disabled.</div>
     </div>
   </div>
 </section>
 
-<section id="limits" class="max-w-7xl mx-auto px-6 mb-28">
-  <div class="mb-10 text-center">
-    <p class="text-sm font-bold text-primary uppercase tracking-wider mb-3">Public hosted relay limits</p>
-    <h2 class="text-3xl font-bold tracking-tight mb-4">Fair-use limits per room, IP, and relay</h2>
-    <p class="text-text-muted max-w-2xl mx-auto">These limits protect the shared Deno free-tier relay. Self-host if you need larger rooms, private infrastructure, or production reliability.</p>
-  </div>
-  <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">4</div><div class="font-bold mb-1">peers per room</div><p class="text-sm text-text-muted">Enough for demos and small agent swarms.</p></div>
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">64KB</div><div class="font-bold mb-1">max WebSocket message</div><p class="text-sm text-text-muted">Oversized messages are rejected before parsing.</p></div>
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">120/min</div><div class="font-bold mb-1">messages per IP</div><p class="text-sm text-text-muted">Repeated violations can disconnect the socket.</p></div>
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">10/min</div><div class="font-bold mb-1">joins per IP</div><p class="text-sm text-text-muted">Protects room auth from noisy clients.</p></div>
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">5</div><div class="font-bold mb-1">unauth sockets per IP</div><p class="text-sm text-text-muted">Unauthenticated sockets auto-timeout.</p></div>
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">500</div><div class="font-bold mb-1">global unauth sockets</div><p class="text-sm text-text-muted">Relay-wide protection before authentication.</p></div>
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">200</div><div class="font-bold mb-1">active rooms max</div><p class="text-sm text-text-muted">Room cap for the shared hosted relay.</p></div>
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">15m</div><div class="font-bold mb-1">idle room TTL</div><p class="text-sm text-text-muted">Idle rooms are eligible for cleanup.</p></div>
-    <div class="rounded-2xl border border-white/10 bg-neutral-dark p-6"><div class="text-3xl font-black text-primary mb-1">20</div><div class="font-bold mb-1">activity entries per room</div><p class="text-sm text-text-muted">Dashboard activity is intentionally bounded.</p></div>
-  </div>
-</section>
-
-<section class="max-w-7xl mx-auto px-6 mb-28">
-  <div class="mb-12">
-    <h2 class="text-3xl font-bold tracking-tight mb-4">How it works</h2>
-    <p class="text-text-muted">Mflow syncs files. It does not sync chat history, tool logs, or agent memory.</p>
-  </div>
-  <div class="grid md:grid-cols-3 gap-6">
-    <div class="bg-neutral-dark border border-white/5 p-8 rounded-2xl hover:border-primary/30 transition-colors group">
-      <span class="material-symbols-outlined text-primary mb-4 text-3xl group-hover:scale-110 transition-transform">sync_alt</span>
-      <h3 class="text-xl font-bold mb-3">Sync</h3>
-      <p class="text-text-muted leading-relaxed">File changes propagate between peers through encrypted room traffic.</p>
+<!-- Limits -->
+<section id="limits">
+  <div class="w">
+    <div class="s-center">
+      <div class="s-label">Public relay limits</div>
+      <h2 class="s-title">Fair-use defaults</h2>
+      <p class="s-desc">These limits protect the shared Deno free-tier relay. Self-host for larger rooms or production reliability.</p>
     </div>
-    <div class="bg-neutral-dark border border-white/5 p-8 rounded-2xl hover:border-primary/30 transition-colors group">
-      <span class="material-symbols-outlined text-primary mb-4 text-3xl group-hover:scale-110 transition-transform">encrypted</span>
-      <h3 class="text-xl font-bold mb-3">Encrypt</h3>
-      <p class="text-text-muted leading-relaxed">Room secrets derive encryption keys. The relay should not be treated as trusted storage.</p>
-    </div>
-    <div class="bg-neutral-dark border border-white/5 p-8 rounded-2xl hover:border-primary/30 transition-colors group">
-      <span class="material-symbols-outlined text-primary mb-4 text-3xl group-hover:scale-110 transition-transform">lock_person</span>
-      <h3 class="text-xl font-bold mb-3">Coordinate</h3>
-      <p class="text-text-muted leading-relaxed">Pause/resume and file locks help avoid conflict during git operations or hot-file edits.</p>
+    <div class="limits-grid">
+      <div class="limit"><div class="limit-val">4</div><div class="limit-name">peers per room</div><div class="limit-desc">Enough for demos and small agent swarms.</div></div>
+      <div class="limit"><div class="limit-val">64 KB</div><div class="limit-name">max message size</div><div class="limit-desc">Oversized messages rejected before parsing.</div></div>
+      <div class="limit"><div class="limit-val">120/m</div><div class="limit-name">messages per IP</div><div class="limit-desc">Repeated violations disconnect the socket.</div></div>
+      <div class="limit"><div class="limit-val">10/m</div><div class="limit-name">joins per IP</div><div class="limit-desc">Protects room auth from noisy clients.</div></div>
+      <div class="limit"><div class="limit-val">5</div><div class="limit-name">unauth sockets/IP</div><div class="limit-desc">Unauthenticated sockets auto-timeout.</div></div>
+      <div class="limit"><div class="limit-val">500</div><div class="limit-name">global unauth cap</div><div class="limit-desc">Relay-wide cap before authentication.</div></div>
+      <div class="limit"><div class="limit-val">200</div><div class="limit-name">active rooms</div><div class="limit-desc">Room cap for the shared hosted relay.</div></div>
+      <div class="limit"><div class="limit-val">15 m</div><div class="limit-name">idle room TTL</div><div class="limit-desc">Idle rooms are eligible for cleanup.</div></div>
+      <div class="limit"><div class="limit-val">20</div><div class="limit-name">activity entries</div><div class="limit-desc">Dashboard activity is intentionally bounded.</div></div>
     </div>
   </div>
 </section>
 
-<section class="max-w-7xl mx-auto px-6 mb-28">
-  <div class="bg-neutral-dark border border-white/5 rounded-3xl overflow-hidden">
-    <div class="grid lg:grid-cols-2">
-      <div class="p-12 flex flex-col justify-center gap-6">
-        <div>
-          <h2 class="text-3xl font-bold mb-4">Monitor your sync room</h2>
-          <p class="text-text-muted text-lg mb-6">Use the dashboard to see connected peers and recent room activity. Enter the same room secret you used in the CLI.</p>
-          <p class="font-mono text-sm text-primary/60 mb-8 break-all">/dashboard</p>
-        </div>
-        <a class="bg-primary hover:bg-primary/90 text-background-dark px-6 py-3 rounded-xl font-bold w-fit transition-all" href="/dashboard">
-          Open Monitor
-        </a>
+<!-- Dashboard promo -->
+<section>
+  <div class="w">
+    <div class="promo">
+      <div class="promo-text">
+        <h2>Monitor your sync room</h2>
+        <p>Use the dashboard to see connected peers and recent room activity. Enter the same room secret you used in the CLI.</p>
+        <div class="promo-path">/dashboard</div>
+        <a class="btn-p" href="/dashboard" style="width:fit-content">Open Monitor</a>
       </div>
-      <div class="bg-gradient-to-br from-neutral-dark to-primary/10 p-4 lg:p-12 relative overflow-hidden flex items-center justify-center min-h-[300px]">
-        <div class="w-full h-full rounded-xl bg-background-dark/60 border border-white/10 p-6 font-mono text-xs">
-          <div class="flex justify-between items-center mb-6"><div class="text-primary">SIGNAL SERVER: ACTIVE</div><div class="text-text-muted">FAIR-USE RELAY</div></div>
-          <div class="space-y-3">
-            <div class="flex gap-4"><span class="text-primary">[ROOM]</span><span>4 peers max on public relay</span></div>
-            <div class="flex gap-4"><span class="text-primary">[SYNC]</span><span>src/auth.ts → 3 peers</span></div>
-            <div class="flex gap-4"><span class="text-primary">[LOCK]</span><span>db.ts locked by agent-beta</span></div>
-            <div class="flex gap-4 opacity-50"><span class="text-primary">[SELF-HOST]</span><span>raise limits with MFLOW_* env vars</span></div>
-          </div>
+      <div class="promo-visual">
+        <div class="promo-mock">
+          <div style="display:flex;justify-content:space-between;margin-bottom:16px"><span class="hl">SIGNAL SERVER: ACTIVE</span><span>FAIR-USE RELAY</span></div>
+          <div><span class="hl">[ROOM]</span> 4 peers max on public relay</div>
+          <div><span class="hl">[SYNC]</span> src/auth.ts → 3 peers</div>
+          <div><span class="hl">[LOCK]</span> db.ts locked by agent-beta</div>
+          <div style="opacity:.4"><span class="hl">[SELF-HOST]</span> raise limits with MFLOW_* env vars</div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<section id="quickstart" class="max-w-7xl mx-auto px-6 mb-28">
-  <h2 class="text-3xl font-bold tracking-tight mb-12 text-center">Quick Start</h2>
-  <div class="grid lg:grid-cols-3 gap-6">
-    <div class="flex flex-col gap-4">
-      <h3 class="text-sm font-bold text-primary uppercase tracking-wider">1. Install</h3>
-      <div class="bg-neutral-dark p-4 rounded-lg font-mono text-sm border border-white/10"><span class="text-text-muted"># npm package, CLI binary is mflow</span><br/><span class="text-text-main">npm i -g mflow-sdk</span></div>
+<!-- Quick Start -->
+<section id="quickstart">
+  <div class="w">
+    <div class="s-center" style="margin-bottom:48px">
+      <h2 class="s-title">Quick Start</h2>
     </div>
-    <div class="flex flex-col gap-4">
-      <h3 class="text-sm font-bold text-primary uppercase tracking-wider">2. Start syncing</h3>
-      <div class="bg-neutral-dark p-4 rounded-lg font-mono text-sm border border-white/10"><span class="text-text-muted"># From project root</span><br/><span class="text-text-main">mflow start --room project-x --secret "$MFLOW_SECRET"</span></div>
-    </div>
-    <div class="flex flex-col gap-4">
-      <h3 class="text-sm font-bold text-primary uppercase tracking-wider">3. Join from another worktree</h3>
-      <div class="bg-neutral-dark p-4 rounded-lg font-mono text-sm border border-white/10"><span class="text-text-muted"># Same room and same secret</span><br/><span class="text-text-main">mflow start --room project-x --secret "$MFLOW_SECRET"</span></div>
+    <div class="qs-grid">
+      <div class="qs-step">
+        <div class="qs-num">1. Install</div>
+        <div class="qs-code"><span class="cmt"># npm package, CLI binary is mflow</span><br/>npm i -g mflow-sdk</div>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">2. Start syncing</div>
+        <div class="qs-code"><span class="cmt"># From project root</span><br/>mflow start --room project-x \\<br/>  --secret "$MFLOW_SECRET"</div>
+      </div>
+      <div class="qs-step">
+        <div class="qs-num">3. Join from another worktree</div>
+        <div class="qs-code"><span class="cmt"># Same room and same secret</span><br/>mflow start --room project-x \\<br/>  --secret "$MFLOW_SECRET"</div>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="max-w-7xl mx-auto px-6 mb-20">
-  <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-    <div class="p-6 rounded-2xl border border-white/5 bg-neutral-dark/40"><h4 class="text-text-main font-bold mb-2">Self-hostable</h4><p class="text-sm text-text-muted">Run your own signaling server on Deno Deploy, Bun, Docker, or private infrastructure.</p></div>
-    <div class="p-6 rounded-2xl border border-white/5 bg-neutral-dark/40"><h4 class="text-text-main font-bold mb-2">MCP and CLI</h4><p class="text-sm text-text-muted">Works from CLI first, with MCP integration for supported harnesses.</p></div>
-    <div class="p-6 rounded-2xl border border-white/5 bg-neutral-dark/40"><h4 class="text-text-main font-bold mb-2">Future managed relay</h4><p class="text-sm text-text-muted">Managed/private relay may come later. Core OSS and self-hosting remain the base path.</p></div>
+<!-- Extras -->
+<section>
+  <div class="w">
+    <div class="extras">
+      <div class="extra"><h4>Self-hostable</h4><p>Run your own signaling server on Deno Deploy, Bun, Docker, or private infrastructure.</p></div>
+      <div class="extra"><h4>MCP and CLI</h4><p>Works from CLI first, with MCP integration for supported harnesses.</p></div>
+      <div class="extra"><h4>Future managed relay</h4><p>Managed/private relay may come later. Core OSS and self-hosting remain the base path.</p></div>
+    </div>
   </div>
 </section>
+
 </main>
-<footer class="border-t border-white/5 bg-neutral-dark/30 py-16">
-  <div class="max-w-7xl mx-auto px-6">
-    <div class="flex flex-col md:flex-row justify-between items-start gap-12 mb-12">
-      <div class="flex flex-col gap-4"><span class="text-2xl font-bold tracking-tight text-text-main">mflow</span><p class="text-text-muted max-w-xs text-sm">Open-source real-time code sync for AI agent teams.</p></div>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-12">
-        <div class="flex flex-col gap-4"><span class="text-xs font-bold text-text-main uppercase">Resources</span><a class="text-sm text-text-muted hover:text-primary transition-colors" href="https://github.com/Obed0101/mflow">GitHub</a><a class="text-sm text-text-muted hover:text-primary transition-colors" href="#quickstart">Documentation</a></div>
-        <div class="flex flex-col gap-4"><span class="text-xs font-bold text-text-main uppercase">Product</span><a class="text-sm text-text-muted hover:text-primary transition-colors" href="/dashboard">Monitor</a><a class="text-sm text-text-muted hover:text-primary transition-colors" href="#limits">Limits</a></div>
-        <div class="flex flex-col gap-4"><span class="text-xs font-bold text-text-main uppercase">Related</span><a class="text-sm text-text-muted hover:text-primary transition-colors" href="https://trees.software/">Trees</a><a class="text-sm text-text-muted hover:text-primary transition-colors" href="https://diffs.com/">Diffs</a></div>
-        <div class="flex flex-col gap-4"><span class="text-xs font-bold text-text-main uppercase">Legal</span><span class="text-sm text-text-muted">MIT License</span></div>
+
+<footer>
+  <div class="w">
+    <div class="ftr-grid">
+      <div class="ftr-brand-col">
+        <div class="ftr-brand">mflow</div>
+        <div class="ftr-tagline">Open-source real-time code sync for AI agent teams.</div>
+      </div>
+      <div class="ftr-links">
+        <div class="ftr-col">
+          <div class="ftr-col-title">Resources</div>
+          <a href="https://github.com/Obed0101/mflow">GitHub</a>
+          <a href="#quickstart">Documentation</a>
+        </div>
+        <div class="ftr-col">
+          <div class="ftr-col-title">Product</div>
+          <a href="/dashboard">Monitor</a>
+          <a href="#limits">Limits</a>
+        </div>
+        <div class="ftr-col">
+          <div class="ftr-col-title">Legal</div>
+          <span>MIT License</span>
+        </div>
       </div>
     </div>
-    <div class="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-white/5 gap-4"><p class="text-sm text-text-muted">Made for AI agent teams. No hosted account required.</p></div>
+    <div class="ftr-bottom">Made for AI agent teams. No hosted account required.</div>
   </div>
 </footer>
 </body>

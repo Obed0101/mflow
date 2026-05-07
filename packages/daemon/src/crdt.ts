@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import * as Y from "yjs";
-import { computeDiff, applyDiffToYText, YDOC_UNLOAD_MINUTES } from "@mflow/shared";
+import { computeDiff, applyDiffToYText, YDOC_UNLOAD_MINUTES } from "../../shared/src/index.js";
 
 // ─── Types ──────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import type { PeerInfo, SignalingErrorCode, ActivityEntry } from "@mflow/shared";
+import type { PeerInfo, SignalingErrorCode, ActivityEntry } from "../../shared/src/index.js";
 import { DEFAULT_SIGNALING_LIMITS, type SignalingLimits } from "./limits.js";
 
 // ─── Types ──────────────────────────────────────────────────

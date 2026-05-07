@@ -1,11 +1,11 @@
 import { EventEmitter } from "node:events";
-import type { FileLock, LockResponse } from "@mflow/shared";
+import type { FileLock, LockResponse } from "../../shared/src/index.js";
 import {
   DEFAULT_LEASE_MS,
   MAX_LEASE_MS,
   MAX_LOCKS,
   LOCK_EXPIRY_CHECK_MS,
-} from "@mflow/shared";
+} from "../../shared/src/index.js";
 
 // ─── Types ──────────────────────────────────────────────────
 

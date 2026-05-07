@@ -7,7 +7,7 @@ import {
   MFLOW_CRDT_DIR,
   DEFAULT_IGNORE_PATTERNS,
   DEFAULT_SIGNALING_URL,
-} from "@mflow/shared";
+} from "../../../shared/src/index.js";
 import { displaySuccess, displayInfo, displayWarning } from "../display.js";
 
 // ─── Default Config Template ────────────────────────────────

@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import * as Y from "yjs";
-import type { ManifestEntry } from "@mflow/shared";
-import { RENAME_DETECTION_WINDOW_MS } from "@mflow/shared";
+import type { ManifestEntry } from "../../shared/src/index.js";
+import { RENAME_DETECTION_WINDOW_MS } from "../../shared/src/index.js";
 
 // ─── Types ──────────────────────────────────────────────────
 

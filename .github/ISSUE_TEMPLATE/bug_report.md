@@ -24,7 +24,7 @@ assignees: ""
 - Bun version:
 - mflow version or commit:
 - Transport: public relay / self-hosted relay / p2p
-- Harness: Codex / Claude Code / opencode / custom / none
+- Harness: Codex / Claude Code / Cursor / opencode / custom / none
 
 ## Logs or output
 

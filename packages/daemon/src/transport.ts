@@ -6,23 +6,23 @@ import type {
   PeerType,
   ConnectionState,
   CipherFrame,
-} from "@mflow/shared";
+} from "../../shared/src/index.js";
 import type {
   SignalingMessage,
   RTCSignalData,
-} from "@mflow/shared";
+} from "../../shared/src/index.js";
 import {
   deriveKeys,
   encrypt,
   decrypt,
   NonceCounter,
   peerIdPrefix,
-} from "@mflow/shared";
+} from "../../shared/src/index.js";
 import {
   NONCE_TOTAL_BYTES,
   NONCE_PEER_PREFIX_BYTES,
   RECONNECT_MAX_DELAY_MS,
-} from "@mflow/shared";
+} from "../../shared/src/index.js";
 
 const MIN_FRAME_SIZE = 15; // 1 type + 2 fileIdLen + 12 nonce minimum
 
@@ -280,7 +280,7 @@ export class WeriftTransport implements ITransport {
     return this.connectionState;
   }
 
-  sendActivity(action: import("@mflow/shared").ActivityAction, file: string): void {
+  sendActivity(action: import("../../shared/src/index.js").ActivityAction, file: string): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.ws.send(JSON.stringify({ type: "activity", action, file }));
   }

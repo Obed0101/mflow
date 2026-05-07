@@ -4,15 +4,15 @@ import {
   SignalingSignalSchema,
   SignalingRelaySchema,
   SignalingActivitySchema,
-} from "@mflow/shared";
-import type { HealthResponse, ActivityEntry } from "@mflow/shared";
+} from "../../shared/src/index.js";
+import type { HealthResponse, ActivityEntry } from "../../shared/src/index.js";
 import { RoomManager, type PeerContext } from "./rooms.js";
 import { RateLimiter } from "./ratelimit.js";
 import { relaySignal, relayData } from "./relay.js";
-import { getDashboardHtml } from "./dashboard-html.js";
+import { getDashboardAuthHtml, getDashboardHtml, getSettingsHtml } from "./dashboard-html.js";
 import { getLandingHtml } from "./landing-html.js";
 import { loadSignalingLimits } from "./limits.js";
-import { getDashboardUser, handleAuthRequest, loadDashboardAuthConfig } from "./dashboard-auth.js";
+import { getDashboardUser, handleAuthRequest, loadDashboardAuthConfig, validateApiKey } from "./dashboard-auth.js";
 
 // ─── State ──────────────────────────────────────────────────
 
@@ -83,6 +83,12 @@ function sendError(
 
 function getIp(ws: ServerWebSocket<PeerContext>): string {
   return ws.data.ip;
+}
+
+async function hasDashboardAccess(req: Request): Promise<boolean> {
+  if (!dashboardAuth.required) return true;
+  if (await getDashboardUser(req, dashboardAuth)) return true;
+  return Boolean(await validateApiKey(req, dashboardAuth));
 }
 
 // ─── Message Handler ────────────────────────────────────────
@@ -310,34 +316,54 @@ const server = Bun.serve<PeerContext>({
 
     // Dashboard
     if (url.pathname === "/dashboard" && req.method === "GET") {
+      if (dashboardAuth.required && !(await hasDashboardAccess(req))) {
+        return new Response(getDashboardAuthHtml(), {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
       return new Response(getDashboardHtml(), {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
     }
 
-    // Rooms API — scoped by auth level
-    if (url.pathname === "/api/rooms" && req.method === "GET") {
-      if (dashboardAuth.required && !getDashboardUser(req)) {
+    if (url.pathname === "/settings" && req.method === "GET") {
+      if (dashboardAuth.required && !(await hasDashboardAccess(req))) {
+        return new Response(getDashboardAuthHtml(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      }
+      return new Response(getSettingsHtml(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    }
+
+    if (url.pathname === "/api/rooms" && req.method === "POST") {
+      if (dashboardAuth.required && !(await getDashboardUser(req, dashboardAuth))) {
         return Response.json({ error: "GitHub sign-in required" }, { status: 401 });
       }
 
-      const secretHash = url.searchParams.get("secretHash");
+      const body = await req.json().catch(() => null) as { secretHash?: unknown } | null;
+      const secretHash = typeof body?.secretHash === "string" ? body.secretHash : "";
+      if (!secretHash) return Response.json({ error: "secretHash is required" }, { status: 400 });
+
       const uptime = Math.floor((Date.now() - startTime) / 1000);
       const memoryMB = Math.round(process.memoryUsage.rss() / 1_048_576);
+      const matched = rooms.getRoomDetailsBySecretHash(secretHash);
+      let matchedPeers = 0;
+      for (const r of matched) matchedPeers += r.peerCount;
+      return Response.json({
+        rooms: matched,
+        totalRooms: matched.length,
+        totalPeers: matchedPeers,
+        uptime,
+        memoryMB,
+      });
+    }
 
-      // Room-scoped: return only rooms matching secretHash
-      if (secretHash) {
-        const matched = rooms.getRoomDetailsBySecretHash(secretHash);
-        let matchedPeers = 0;
-        for (const r of matched) matchedPeers += r.peerCount;
-        return Response.json({
-          rooms: matched,
-          totalRooms: matched.length,
-          totalPeers: matchedPeers,
-          uptime,
-          memoryMB,
-        });
+    // Rooms API — scoped by auth level
+    if (url.pathname === "/api/rooms" && req.method === "GET") {
+      if (dashboardAuth.required && !(await getDashboardUser(req, dashboardAuth))) {
+        return Response.json({ error: "GitHub sign-in required" }, { status: 401 });
       }
+
+      const uptime = Math.floor((Date.now() - startTime) / 1000);
+      const memoryMB = Math.round(process.memoryUsage.rss() / 1_048_576);
 
       // Public: aggregate stats only — no room IDs, no peer names
       return Response.json({

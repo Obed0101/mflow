@@ -1,7 +1,7 @@
 import { connect, type Socket } from "node:net";
 import { join } from "node:path";
-import { MFLOW_SOCK_FILE } from "@mflow/shared";
-import type { IPCRequest, IPCResponse } from "@mflow/shared";
+import { MFLOW_SOCK_FILE } from "../../shared/src/index.js";
+import type { IPCRequest, IPCResponse } from "../../shared/src/index.js";
 
 // ─── IPC Client ─────────────────────────────────────────────
 

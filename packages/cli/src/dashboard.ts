@@ -1,4 +1,4 @@
-import type { DaemonStatus, DaemonState } from "@mflow/shared";
+import type { DaemonStatus, DaemonState } from "../../shared/src/index.js";
 import { sendIPC } from "./ipc-client.js";
 
 // ─── ANSI Escape Sequences ─────────────────────────────────

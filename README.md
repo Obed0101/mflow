@@ -1,73 +1,37 @@
 # mflow
 
-Open-source real-time file sync for AI agent teams and developers working across multiple worktrees or machines.
+Sync local worktrees so AI agents and humans stop overwriting each other.
 
-mflow keeps local project files in sync while agents or humans edit. It is CLI-first, self-hostable, room-secret based, and designed to reduce blind parallel edits before you commit to git.
-
-## Current release status
-
-mflow is being prepared for its first public OSS release. The initial npm package name is `mflow-sdk`; the installed binary is still `mflow`.
+mflow runs a local daemon per worktree, watches file changes, and relays encrypted updates through a shared room. Use it when several agents, terminals, or machines are editing the same project and you want changes to appear before git becomes the conflict detector. Without it, parallel worktrees drift silently until someone discovers stale files, duplicated edits, or a bad merge at the worst moment.
 
 ```bash
 npm i -g mflow-sdk
 mflow --help
 ```
 
-Do not treat hosted account login as available yet. The current public and self-hosted flows use a room name plus a strong shared secret. Hosted account/device authorization is planned for a future hosted product.
-
-## What mflow is
-
-- A local daemon that watches project files and syncs changes with peers in the same room.
-- A WebSocket relay protocol for peer discovery and encrypted payload forwarding.
-- A CLI for start/stop/status/pause/resume/file-lock workflows.
-- A small MCP package for harness integrations.
-- A self-hostable signaling server for Bun, Docker, and Deno Deploy.
-
-## What mflow is not
-
-- Not a git replacement. Git remains the source of truth for history and review.
-- Not a cloud IDE. Files remain local on every peer.
-- Not an account system in the current OSS release.
-- Not a production SLA when using the public fair-use relay.
-- Not a secret manager. You must generate and share strong room secrets safely.
+Package name: `mflow-sdk`. Installed binary: `mflow`.
 
 ## Quick start
-
-### 1. Install
-
-```bash
-npm i -g mflow-sdk
-```
-
-### 2. Start a room in the first worktree
 
 ```bash
 export MFLOW_SECRET="$(openssl rand -hex 32)"
 mflow start --room my-project/main --secret "$MFLOW_SECRET"
 ```
 
-If you omit `--secret`, mflow generates one and prints it once. Treat it like a password.
-
-### 3. Join from another worktree or machine
+Join another worktree or machine with the same room and secret:
 
 ```bash
 mflow start --room my-project/main --secret "$MFLOW_SECRET"
 ```
 
-Both peers must use the same room and secret. The public relay is used by default:
-
-```text
-wss://mflow-signal.obed0101.deno.net
-```
-
-### 4. Check status
+Check sync:
 
 ```bash
 mflow status
 mflow status --watch
 ```
 
-### 5. Pause around git operations
+Pause around git operations:
 
 ```bash
 mflow pause
@@ -76,10 +40,23 @@ git commit -m "your change"
 mflow resume
 ```
 
-### 6. Stop
+Stop:
 
 ```bash
 mflow stop
+```
+
+## How it works
+
+1. A local daemon watches files in each worktree.
+2. Peers join the same room using a shared secret.
+3. The relay forwards encrypted updates and peer activity.
+4. Git remains the source of truth for history and review.
+
+The public relay is used by default:
+
+```text
+wss://mflow-signal.obed0101.deno.net
 ```
 
 ## CLI basics
@@ -107,11 +84,115 @@ mflow start \
   --transport relay
 ```
 
-`--transport relay` is the default. `--transport p2p` exists for direct WebRTC-style transport experiments, but the relay path is the public-ready default.
+`--transport relay` is the public-ready default. `--transport p2p` exists for direct WebRTC-style transport experiments.
+
+## Agent and MCP setup
+
+The stable baseline is CLI + daemon + room secret. MCP is an optional control plane for agents to call status, peers, pause/resume, and locks.
+
+<details>
+<summary>Codex</summary>
+
+```bash
+codex mcp add mflow -- bunx mflow-mcp --root /absolute/path/to/repo
+```
+
+Recommended agent rule: before commit/rebase/reset, call mflow pause; after tests and git operation, call mflow resume.
+
+Full guide: [docs/harnesses/codex.md](./docs/harnesses/codex.md)
+
+</details>
+
+<details>
+<summary>Claude Code</summary>
+
+```bash
+claude mcp add mflow -- bunx mflow-mcp --root /absolute/path/to/repo
+```
+
+Use MCP for operational controls only. Keep room secrets in the CLI/environment, not in prompts or logs.
+
+Full guide: [docs/harnesses/claude-code.md](./docs/harnesses/claude-code.md)
+
+</details>
+
+<details>
+<summary>Cursor</summary>
+
+Create `.cursor/mcp.json` in the repo or `~/.cursor/mcp.json` globally:
+
+```json
+{
+  "mcpServers": {
+    "mflow": {
+      "command": "bunx",
+      "args": ["mflow-mcp", "--root", "${workspaceFolder}"]
+    }
+  }
+}
+```
+
+Full guide: [docs/harnesses/cursor.md](./docs/harnesses/cursor.md)
+
+</details>
+
+<details>
+<summary>opencode</summary>
+
+Start mflow as a sidecar daemon in each synced worktree:
+
+```bash
+export MFLOW_SECRET="$(openssl rand -hex 32)"
+mflow start --room project-x/opencode --secret "$MFLOW_SECRET"
+```
+
+Use aliases or tasks for `mflow status --watch`, `mflow pause`, `mflow resume`, and `mflow locks`.
+
+Full guide: [docs/harnesses/opencode.md](./docs/harnesses/opencode.md)
+
+</details>
+
+<details>
+<summary>Custom MCP clients</summary>
+
+Use stdio:
+
+```json
+{
+  "mcpServers": {
+    "mflow": {
+      "command": "bunx",
+      "args": ["mflow-mcp", "--root", "/absolute/path/to/repo"]
+    }
+  }
+}
+```
+
+Full guide: [docs/harnesses/custom-cli.md](./docs/harnesses/custom-cli.md)
+
+</details>
+
+## What happens if an agent forgets to pause?
+
+mflow watches `.git/index.lock` and auto-pauses during active git operations, but that is a last safety net. The danger window is before git creates the lock: remote synced edits may arrive before staging or committing.
+
+If you forgot to pause:
+
+```bash
+git status --short
+git show --stat --oneline HEAD
+mflow status
+```
+
+If unwanted synced files entered the commit, amend or revert before pushing.
+
+## Skill for agents
+
+A portable mflow skill lives in [`skills/mflow/SKILL.md`](./skills/mflow/SKILL.md). Install or copy it into agent runtimes that support skills so agents know when to pause, resume, lock files, and use MCP safely.
 
 ## Public relay limits
 
-The shared public relay is a free fair-use service intended for demos, onboarding, and small agent swarms. Current default limits are:
+The shared relay is a free fair-use service for demos, onboarding, and small agent swarms.
 
 | Limit | Default |
 |---|---:|
@@ -152,12 +233,24 @@ mflow uses a room secret for room admission and local key derivation. The relay 
 
 Read the full [security model](./docs/security-model.md).
 
-## Harness guides
+## Roadmap
 
-- [Codex](./docs/harnesses/codex.md)
-- [Claude Code](./docs/harnesses/claude-code.md)
-- [opencode](./docs/harnesses/opencode.md)
-- [Custom CLI or agent harness](./docs/harnesses/custom-cli.md)
+Current:
+
+- CLI-first room + secret sync.
+- Public fair-use relay.
+- Self-hosted Bun/Docker/Deno Deploy relay.
+- Dashboard status and hosted settings/API keys.
+- MCP control surface for status, peers, pause/resume, and locks.
+
+Next:
+
+- Harden npm packaging and install tests for every release.
+- Improve MCP setup for Codex, Claude Code, Cursor, opencode, and custom clients.
+- Add better room-level dashboard views without exposing plaintext secrets.
+- Add optional pre-commit helpers that pause/resume mflow safely.
+
+Full roadmap: [docs/roadmap.md](./docs/roadmap.md)
 
 ## Development
 
@@ -177,6 +270,7 @@ packages/daemon      File watcher, CRDT sync, IPC, transports
 packages/cli         mflow CLI and daemon launcher
 packages/signaling   Bun relay, Deno Deploy relay, landing/dashboard
 packages/mcp         MCP integration package
+skills/mflow         Portable agent skill for safe mflow operation
 ```
 
 ## Release and contribution
@@ -185,19 +279,7 @@ packages/mcp         MCP integration package
 - Security policy: [SECURITY.md](./SECURITY.md)
 - Contribution guide: [CONTRIBUTING.md](./CONTRIBUTING.md)
 - Release process: [docs/release-process.md](./docs/release-process.md)
-- Hosted auth roadmap: [docs/hosted-auth.md](./docs/hosted-auth.md)
+- Harness guides: [docs/harnesses](./docs/harnesses/README.md)
+- Hosted auth docs: [docs/hosted-auth.md](./docs/hosted-auth.md)
 
-Before publishing, re-check npm package names and inspect `npm pack --dry-run`. Do not publish from a dirty or unreviewed worktree.
-
-## Hosted account/device login roadmap
-
-Future hosted mflow may add GitHub OAuth with CLI device authorization:
-
-```text
-mflow login
-Open: https://github.com/login/device
-Code: ABCD-EFGH
-Waiting for approval...
-```
-
-The hosted dashboard can be gated with GitHub device sign-in by setting `MFLOW_REQUIRE_DASHBOARD_AUTH=true` and configuring a GitHub App client ID. This protects dashboard/API room status only. The sync protocol still uses room + secret. Self-hosted mflow can remain usable without hosted accounts. A future self-hosted admin mode may support local email/password through explicit environment configuration.
+Before publishing, inspect `npm pack --dry-run` and run `scripts/check-public-release.sh`. Do not publish from a dirty or unreviewed worktree.

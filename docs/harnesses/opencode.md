@@ -26,6 +26,27 @@ mflow resume
 mflow locks
 ```
 
+## MCP setup
+
+If your opencode setup supports stdio MCP servers, register mflow with the same command shape used by other MCP clients:
+
+```json
+{
+  "mcpServers": {
+    "mflow": {
+      "command": "bunx",
+      "args": ["mflow-mcp", "--root", "/absolute/path/to/repo"]
+    }
+  }
+}
+```
+
+Recommended agent instruction:
+
+```text
+Use mflow status before long tasks, mflow lock before high-conflict edits, mflow pause before commit/rebase/reset, and mflow resume after tests and git operations. Never print room secrets.
+```
+
 ## File locking
 
 Before assigning multiple agents around the same area:

@@ -1,6 +1,6 @@
 import { readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { MFLOW_PID_FILE, MFLOW_SOCK_FILE } from "@mflow/shared";
+import { MFLOW_PID_FILE, MFLOW_SOCK_FILE } from "../../../shared/src/index.js";
 import { sendIPC, isDaemonRunning } from "../ipc-client.js";
 import { displaySuccess, displayError, displayWarning } from "../display.js";
 

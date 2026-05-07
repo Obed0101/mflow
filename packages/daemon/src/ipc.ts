@@ -7,8 +7,8 @@ import { createServer, type Server, type Socket } from "node:net";
 import { unlink, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { existsSync } from "node:fs";
-import type { IPCRequest, IPCResponse, PauseSource, FileLock, LockResponse } from "@mflow/shared";
-import { IPCRequestSchema } from "@mflow/shared";
+import type { IPCRequest, IPCResponse, PauseSource, FileLock, LockResponse } from "../../shared/src/index.js";
+import { IPCRequestSchema } from "../../shared/src/index.js";
 
 // ─── Types ──────────────────────────────────────────────────
 

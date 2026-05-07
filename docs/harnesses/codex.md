@@ -36,4 +36,18 @@ mflow start \
 
 ## MCP note
 
-mflow includes an MCP package, but the CLI-first workflow is the stable baseline. If wiring MCP tools into Codex, keep them thin: status, peers, pause/resume, and locks. Do not make hosted account login a dependency for self-hosted rooms.
+mflow includes an MCP server. Keep it thin: status, peers, pause/resume, and locks. Do not make hosted account login a dependency for self-hosted rooms.
+
+Install the MCP server for a repo:
+
+```bash
+codex mcp add mflow -- bunx mflow-mcp --root /absolute/path/to/repo
+```
+
+Recommended Codex instruction:
+
+```text
+When working in this repo, use mflow before coordinated edits. Call mflow status at task start, lock hot files before parallel edits, pause before commit/rebase/reset, and resume after tests and git operations. Never print room secrets.
+```
+
+If your Codex setup supports skills, copy or symlink `skills/mflow/SKILL.md` into the runtime skill directory and mention the mflow skill in repo instructions.

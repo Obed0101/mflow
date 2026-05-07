@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sendIPC } from "../ipc-client.js";
-import type { PeerInfo } from "@mflow/shared";
+import type { PeerInfo } from "../../../shared/src/index.js";
 
 export function registerPeerTools(server: McpServer, projectRoot: string): void {
   server.tool(

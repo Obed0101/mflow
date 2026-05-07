@@ -1,541 +1,566 @@
 /**
  * Dashboard HTML template for the mflow signaling server.
  * Pure HTML + CSS + vanilla JS — no frameworks, no build step.
- *
- * Two modes:
- * - Public (default): aggregate stats only, no room IDs or peer names
- * - Room-scoped: enter room secret, client-side SHA-256 hash, show room + activity feed
  */
-
 export function getDashboardHtml(): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mflow signaling server</title>
+  <title>mflow dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    :root {
+      --bg: #09090b;
+      --bg-card: rgba(24, 24, 27, 0.4);
+      --border: rgba(255, 255, 255, 0.1);
+      --border-hover: rgba(255, 255, 255, 0.2);
+      --text: #f8fafc;
+      --text-muted: #a1a1aa;
+      --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.15);
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #0a0a0a;
-      color: #fafafa;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background:
+        radial-gradient(circle at 20% -10%, rgba(52,211,153,.12), transparent 32%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
       font-size: 14px;
       line-height: 1.5;
       min-height: 100vh;
-      padding: 24px;
+      display: block;
     }
-
-    .mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
-
-    .container { max-width: 760px; margin: 0 auto; }
-
-    /* ─── Header ────────────────────────────────── */
-
-    .header {
-      background: #141414;
-      border: 1px solid #1e1e1e;
-      border-radius: 8px;
-      padding: 20px 24px;
-      margin-bottom: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    .app-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 236px 1fr;
     }
-
-    .header-top {
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 28px 18px;
+      border-right: 1px solid var(--border);
+      background: rgba(8, 9, 13, .74);
+    }
+    .side-brand {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 10px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -.045em;
+      margin: 0 10px 32px;
+    }
+    .side-brand::before {
+      content: '';
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 0 18px rgba(52,211,153,.9);
+    }
+    .side-nav {
+      display: grid;
+      gap: 8px;
+    }
+    .side-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 750;
+      transition: background .16s ease, border-color .16s ease, color .16s ease;
+    }
+    .side-link svg { width: 18px; height: 18px; fill: currentColor; }
+    .side-link:hover,
+    .side-link[aria-current="page"] {
+      color: var(--text);
+      border-color: var(--border);
+      background: rgba(255,255,255,.045);
+    }
+    .side-spacer { flex: 1; }
+    .side-user {
+      display: grid;
+      gap: 10px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .side-user-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(255,255,255,.035);
+    }
+    .side-user-card img {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .side-user-card span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 800;
+    }
+    .side-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .side-actions a {
+      flex: 1;
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: rgba(255,255,255,.035);
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 800;
+      transition: color .16s, border-color .16s, background .16s;
+    }
+    .side-actions a:hover {
+      color: var(--text);
+      border-color: var(--border-hover);
+      background: rgba(255,255,255,.06);
+    }
+    .github-link svg { width: 18px; height: 18px; fill: currentColor; }
+
+    /* ── Top Navigation ────────────────────────── */
+    .topnav {
+      height: 64px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8, 9, 13, 0.78);
+      backdrop-filter: blur(18px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topnav-inner {
+      max-width: 1120px;
+      height: 100%;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+    }
+    .topnav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -.04em;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .topnav-brand::before {
+      content: '';
+      display: block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 18px rgba(52,211,153,.9);
+    }
+    .topnav-status {
+      justify-self: center;
+      color: var(--text-muted);
+      font: 600 12px var(--mono);
+      letter-spacing: .02em;
+    }
+    .topnav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .topnav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+    }
+    .topnav-links a:hover { transform: translateY(-1px); }
+    .topnav-cta {
+      color: #050607 !important;
+      background: #f6f7f4;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-weight: 800 !important;
+    }
+    .icon-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,.04);
+    }
+    .icon-link svg { width: 18px; height: 18px; fill: currentColor; }
+    .nav-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,.04);
+    }
+    .nav-link svg { width: 18px; height: 18px; fill: currentColor; }
+    .user-menu {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 6px 4px 4px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.03);
+    }
+    .user-menu img {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+    }
+    .user-login {
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .signout-link {
+      color: var(--text-muted) !important;
+      font-size: 12px !important;
+      padding: 0 6px;
+    }
+    .settings-toggle {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* ── Main Content ──────────────────────────── */
+    .main {
+      flex: 1;
+      padding: 56px 48px;
+      max-width: 1000px;
+      width: 100%;
+      margin: 0;
+    }
+
+    /* ── Stats Header ──────────────────────────── */
+    .stats-header {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 120px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      font-family: var(--mono);
+      color: #fff;
+    }
+
+    /* ── Cards ─────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
       margin-bottom: 16px;
     }
 
-    .header-title {
+    /* ── Forms & Inputs ────────────────────────── */
+    .input-group {
       display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .header h1 {
-      font-size: 15px;
-      font-weight: 600;
-      color: #fafafa;
-      letter-spacing: -0.01em;
-    }
-
-    .status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #10b981;
-      box-shadow: 0 0 8px #10b98166;
-      flex-shrink: 0;
-    }
-    .status-dot.warning { background: #eab308; box-shadow: 0 0 8px #eab30866; }
-    .status-dot.error { background: #ef4444; box-shadow: 0 0 8px #ef444466; }
-
-    .uptime-badge {
-      font-size: 12px;
-      color: #737373;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    /* ─── Stats Cards ───────────────────────────── */
-
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
       gap: 12px;
+      max-width: 500px;
     }
-
-    .stat-card {
-      text-align: center;
-      padding: 12px 8px;
-      background: #0a0a0a;
-      border: 1px solid #1e1e1e;
-      border-radius: 6px;
-    }
-
-    .stat-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: #fafafa;
-      font-family: 'JetBrains Mono', monospace;
-      line-height: 1.2;
-    }
-
-    .stat-label {
-      font-size: 11px;
-      color: #737373;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-top: 2px;
-    }
-
-    /* ─── Access (inline) ───────────────────────── */
-
-    .access-bar {
-      margin-bottom: 12px;
-    }
-
-    .login-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .login-row input {
+    input {
       flex: 1;
-      background: #141414;
-      border: 1px solid #1e1e1e;
-      border-radius: 6px;
-      padding: 8px 12px;
-      color: #fafafa;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-
-    .login-row input:focus {
-      border-color: #10b981;
-      box-shadow: 0 0 0 2px #10b98120;
-    }
-
-    .login-row input::placeholder { color: #404040; }
-
-    .github-auth {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .github-auth-copy {
-      color: #a3a3a3;
-      font-size: 13px;
-    }
-
-    .device-box {
-      margin-top: 12px;
-      padding: 12px;
-      background: #0a0a0a;
-      border: 1px solid #1e1e1e;
-      border-radius: 6px;
-      color: #a3a3a3;
-      font-size: 13px;
-    }
-
-    .device-code {
-      display: inline-block;
-      margin: 8px 0;
-      color: #10b981;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-    }
-
-    .btn {
-      background: #1e1e1e;
-      border: 1px solid #2a2a2a;
-      border-radius: 6px;
-      padding: 8px 16px;
-      color: #fafafa;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background 0.15s, border-color 0.15s;
-    }
-
-    .btn:hover { background: #2a2a2a; border-color: #333; }
-
-    .btn-primary {
-      background: #065f46;
-      border-color: #10b981;
-      color: #10b981;
-    }
-
-    .btn-primary:hover { background: #047857; }
-
-    .room-badge {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 12px;
-      background: #141414;
-      border: 1px solid #1e1e1e;
-      border-radius: 6px;
-      font-size: 13px;
-    }
-
-    .room-badge-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: #10b981;
-      flex-shrink: 0;
-    }
-
-    .room-badge-name {
-      color: #fafafa;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-    }
-
-    .room-badge-close {
-      background: none;
-      border: none;
-      color: #737373;
-      font-size: 16px;
-      cursor: pointer;
-      padding: 0 0 0 4px;
-      line-height: 1;
-      font-family: 'Inter', sans-serif;
-    }
-
-    .room-badge-close:hover { color: #ef4444; }
-
-    /* ─── Room Card ──────────────────────────────── */
-
-    .card {
-      background: #141414;
-      border: 1px solid #1e1e1e;
-      border-radius: 8px;
-      padding: 20px 24px;
-      margin-bottom: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    }
-
-    .card-title {
-      font-size: 11px;
-      font-weight: 600;
-      color: #737373;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 14px;
-    }
-
-    .room-info {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 14px;
-      font-size: 13px;
-    }
-
-    .room-name {
-      font-weight: 600;
-      color: #fafafa;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .room-meta {
-      color: #737373;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-    }
-
-    .peers-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .peer-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      background: #0a0a0a;
-      border: 1px solid #1e1e1e;
-      border-radius: 16px;
-      font-size: 12px;
-      color: #fafafa;
-    }
-
-    .peer-pill-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .peer-pill-dot.agent { background: #06b6d4; }
-    .peer-pill-dot.human { background: #10b981; }
-
-    .peer-pill-type {
-      color: #737373;
-      font-size: 11px;
-    }
-
-    .peer-pill-type.agent { color: #06b6d4; }
-    .peer-pill-type.human { color: #10b981; }
-
-    /* ─── Activity Feed ──────────────────────────── */
-
-    .activity-feed {
-      max-height: 440px;
-      overflow-y: auto;
-      scrollbar-width: thin;
-      scrollbar-color: #1e1e1e transparent;
-    }
-
-    .activity-feed::-webkit-scrollbar { width: 4px; }
-    .activity-feed::-webkit-scrollbar-track { background: transparent; }
-    .activity-feed::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 2px; }
-
-    .activity-row {
-      display: grid;
-      grid-template-columns: 60px 1fr auto auto;
-      gap: 12px;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid #1a1a1a;
-      font-size: 13px;
-      opacity: 1;
-      transition: opacity 0.3s, border-color 0.5s;
-    }
-
-    .activity-row:last-child { border-bottom: none; }
-
-    .activity-row.new-entry {
-      border-left: 2px solid #10b981;
-      padding-left: 8px;
-      animation: flash-green 1s ease-out;
-    }
-
-    @keyframes flash-green {
-      0% { background: #10b98115; border-left-color: #10b981; }
-      100% { background: transparent; border-left-color: transparent; }
-    }
-
-    @keyframes fade-in {
-      from { opacity: 0; transform: translateY(-4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .activity-row.entering {
-      animation: fade-in 0.3s ease-out;
-    }
-
-    .activity-time {
-      color: #404040;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      text-align: right;
-    }
-
-    .activity-peer {
-      color: #fafafa;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .activity-action {
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .activity-action.synced { color: #10b981; }
-    .activity-action.created { color: #3b82f6; }
-    .activity-action.deleted { color: #ef4444; }
-
-    .activity-file {
-      color: #737373;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      text-align: right;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 200px;
-      direction: rtl;
-    }
-
-    .empty-activity {
-      color: #404040;
-      font-size: 13px;
-      text-align: center;
-      padding: 32px 0;
-    }
-
-    .public-msg {
-      color: #404040;
-      font-size: 13px;
-      text-align: center;
-      padding: 32px 0;
-    }
-
-    /* ─── Error Banner ───────────────────────────── */
-
-    .error-banner {
-      display: none;
-      background: #1a0a0a;
-      border: 1px solid #3d1f1f;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 10px 16px;
-      margin-bottom: 12px;
-      color: #ef4444;
-      font-size: 13px;
+      color: #fff;
+      font-family: var(--sans);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
     }
+    input:focus { border-color: var(--green); }
+    .btn {
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn-outline {
+      background: transparent;
+      color: #fff;
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.05); }
 
-    /* ─── Footer ─────────────────────────────────── */
-
-    .footer {
+    /* ── Room Data ─────────────────────────────── */
+    .room-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 10px 0;
-      font-size: 12px;
-      color: #404040;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
     }
+    .room-id {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--green);
+    }
+    .peers-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+    .peer-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-family: var(--mono);
+    }
+    .peer-type {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .peer-type.agent { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .peer-type.human { background: rgba(16,185,129,0.15); color: var(--green); }
 
-    .footer-refresh { color: #10b981; }
-
-    /* ─── Utilities ──────────────────────────────── */
+    /* ── Activity Feed ─────────────────────────── */
+    .activity-feed {
+      display: flex;
+      flex-direction: column;
+    }
+    .activity-row {
+      display: grid;
+      grid-template-columns: 80px 1fr auto 200px;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .activity-row:last-child { border-bottom: none; }
+    .activity-time { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+    .activity-peer { font-weight: 500; color: #fff; }
+    .activity-action { font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .action-synced { color: var(--green); }
+    .action-created { color: var(--blue); }
+    .action-deleted { color: var(--red); }
+    .activity-file { font-family: var(--mono); font-size: 12px; color: var(--text-muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .hidden { display: none !important; }
+    .error-msg { color: var(--red); font-size: 13px; margin-top: 12px; }
 
-    /* ─── Responsive ─────────────────────────────── */
-
-    @media (max-width: 600px) {
-      body { padding: 12px; }
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
-      .header, .card { padding: 16px; }
-      .login-row { flex-direction: column; }
-      .activity-row { grid-template-columns: 50px 1fr auto; }
+    @media (max-width: 640px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar {
+        position: static;
+        height: auto;
+        padding: 16px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .side-brand { margin-bottom: 14px; }
+      .side-nav { grid-template-columns: 1fr 1fr; }
+      .side-spacer { display: none; }
+      .side-user { margin-top: 12px; }
+      .main { padding: 28px 16px; }
+      .topnav-inner { grid-template-columns: 1fr auto; }
+      .topnav-status { display: none; }
+      .user-login, .signout-link { display: none; }
+      .activity-row { grid-template-columns: 60px 1fr auto; }
       .activity-file { display: none; }
-      .room-info { gap: 10px; }
+      .input-group { flex-direction: column; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <div class="header">
-      <div class="header-top">
-        <div class="header-title">
-          <span class="status-dot" id="status-dot"></span>
-          <h1>mflow signaling</h1>
-        </div>
-        <span class="uptime-badge" id="uptime">--</span>
-      </div>
-      <div class="stats-row">
-        <div class="stat-card">
-          <div class="stat-value" id="room-count">-</div>
-          <div class="stat-label">Rooms</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="peer-count">-</div>
-          <div class="stat-label">Peers</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="memory">-</div>
-          <div class="stat-label">Memory</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="status-text">OK</div>
-          <div class="stat-label">Status</div>
-        </div>
-      </div>
-    </div>
 
-    <!-- GitHub auth gate, enabled only on hosted relay when configured -->
-    <div class="card hidden" id="github-auth-card">
-      <div class="github-auth">
-        <div>
-          <div class="card-title">Dashboard access</div>
-          <div class="github-auth-copy">Sign in with GitHub before viewing room status. Self-hosted relays can keep this disabled.</div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a href="/" class="side-brand">mflow</a>
+      <nav class="side-nav" aria-label="Dashboard navigation">
+        <a class="side-link" href="/dashboard" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h7V4H4v9Zm0 7h7v-5H4v5Zm9 0h7v-9h-7v9Zm0-16v5h7V4h-7Z"/></svg>
+          Dashboard
+        </a>
+        <a class="side-link" href="/settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2.4h-4L9.6 5a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg>
+          Settings
+        </a>
+      </nav>
+      <div class="side-spacer"></div>
+      <div class="side-user">
+        <div id="user-info" class="side-user-card hidden">
+          <img id="user-avatar" src="" alt="">
+          <span id="user-login"></span>
         </div>
-        <button class="btn btn-primary" id="github-login-btn" type="button">Sign in with GitHub</button>
+        <div class="side-actions">
+          <a href="#" id="auth-logout-btn">Sign out</a>
+          <a class="github-link" href="https://github.com/Obed0101/mflow" target="_blank" rel="noreferrer" aria-label="Open mflow on GitHub">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.92 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.6-2.81 5.61-5.49 5.91.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"/></svg>
+          </a>
+        </div>
       </div>
-      <div class="device-box hidden" id="device-box"></div>
-    </div>
+    </aside>
 
-    <!-- Access (inline, not a card) -->
-    <div class="access-bar" id="access-bar">
-      <div class="login-row" id="login-row">
-        <input type="password" id="secret-input" placeholder="Room secret" autocomplete="off" aria-label="Room secret">
-        <button class="btn btn-primary" id="login-btn" type="button">Connect</button>
+  <main class="main">
+
+    <div class="stats-header">
+      <div class="stat-item">
+        <span class="stat-label">Relay Status</span>
+        <span class="stat-value" style="color: var(--green)" id="status-text">Online</span>
       </div>
-      <div class="login-row hidden" id="room-badge-row">
-        <div class="room-badge" id="room-badge">
-          <span class="room-badge-dot"></span>
-          <span class="room-badge-name" id="room-badge-name">--</span>
-          <button class="room-badge-close" id="logout-btn" type="button" aria-label="Disconnect">&times;</button>
-        </div>
+      <div class="stat-item">
+        <span class="stat-label">Active Rooms</span>
+        <span class="stat-value" id="room-count">-</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Total Peers</span>
+        <span class="stat-value" id="peer-count">-</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Uptime</span>
+        <span class="stat-value" id="uptime">--</span>
       </div>
     </div>
 
-    <!-- Error -->
-    <div class="error-banner" id="error-banner"></div>
-
-    <!-- Room Card (visible when logged in) -->
-    <div class="card hidden" id="room-card">
-      <div id="rooms-container"></div>
+    <!-- Auth Gate -->
+    <div id="github-gate" class="card hidden" style="text-align: center; padding: 64px 24px;">
+      <h2 style="font-size: 20px; font-weight: 600; color: #fff; margin-bottom: 12px;">GitHub Authentication Required</h2>
+      <p style="color: var(--text-muted); margin-bottom: 32px;">This relay requires you to sign in before accessing the dashboard.</p>
+      <button class="btn" id="github-login-btn">Sign in with GitHub</button>
+      <div id="device-box" class="hidden" style="margin-top: 32px; padding: 24px; background: rgba(0,0,0,0.5); border-radius: 12px; border: 1px solid var(--border);"></div>
     </div>
 
-    <!-- Activity Feed (visible when logged in) -->
-    <div class="card hidden" id="activity-card">
-      <div class="card-title">Activity</div>
-      <div class="activity-feed" id="activity-feed">
-        <div class="empty-activity">Waiting for activity...</div>
+    <!-- Room Gate -->
+    <div id="room-gate" class="card">
+      <h2 class="card-title">Monitor Room</h2>
+      <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">Enter your room secret to view live peers and file activity.</p>
+
+      <div id="login-row" class="input-group">
+        <input type="password" id="secret-input" placeholder="Room Secret..." autocomplete="off">
+        <button class="btn" id="login-btn">Connect</button>
+      </div>
+
+      <div id="room-badge-row" class="hidden" style="display:flex; align-items:center; justify-content:space-between;">
+        <span class="room-id" id="active-room-id">--</span>
+        <button class="btn btn-outline" id="logout-btn" style="padding: 6px 12px; font-size: 12px;">Disconnect</button>
+      </div>
+
+      <div id="error-banner" class="error-msg hidden"></div>
+    </div>
+
+    <!-- Room Data -->
+    <div id="room-data" class="hidden">
+      <div class="card">
+        <h3 style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 16px;">Connected Peers</h3>
+        <div id="peers-container" class="peers-list"></div>
+
+        <h3 style="font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 16px; margin-top: 16px;">Recent Activity</h3>
+        <div id="activity-feed" class="activity-feed"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:28px;">
+          <div style="border:1px solid var(--border);border-radius:10px;padding:18px;background:rgba(0,0,0,0.18);">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">File tree</div>
+            <div style="font-size:13px;color:var(--text-muted);">Room file tree view will use the Trees renderer.</div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:10px;padding:18px;background:rgba(0,0,0,0.18);">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Changed files</div>
+            <div style="font-size:13px;color:var(--text-muted);">Room diff view will use the Diffs renderer.</div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Public message (visible when not logged in) -->
-    <div class="card" id="public-card">
-      <div class="public-msg">Enter a room secret to view peers and activity</div>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-      <span>Updated <span id="last-updated">--</span></span>
-      <span>Auto-refresh: <span class="footer-refresh">ON</span> (2s)</span>
-    </div>
+  </main>
   </div>
 
   <script>
@@ -545,13 +570,9 @@ export function getDashboardHtml(): string {
       var mode = 'public';
       var secretHash = null;
       var knownActivityIds = {};
-      var activityCount = 0;
       var authRequired = false;
       var authenticated = false;
-      var authConfigured = false;
       var authPollTimer = null;
-
-      // ─── Crypto ─────────────────────────────────────
 
       function sha256(str) {
         return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function(buf) {
@@ -562,45 +583,12 @@ export function getDashboardHtml(): string {
         });
       }
 
-      // ─── Session ────────────────────────────────────
-
       function loadSession() {
-        try {
-          var s = JSON.parse(sessionStorage.getItem('mflow_dash') || '{}');
-          if (s.mode === 'room' && s.hash) { mode = 'room'; secretHash = s.hash; }
-        } catch (_) {}
+        try { sessionStorage.removeItem('mflow_dash'); } catch (_) {}
       }
 
       function saveSession() {
-        try {
-          if (mode === 'room') sessionStorage.setItem('mflow_dash', JSON.stringify({ mode: 'room', hash: secretHash }));
-          else sessionStorage.removeItem('mflow_dash');
-        } catch (_) {}
-      }
-
-      // ─── Formatting ─────────────────────────────────
-
-      function formatUptime(sec) {
-        if (sec < 60) return sec + 's';
-        if (sec < 3600) return Math.floor(sec / 60) + 'm';
-        var h = Math.floor(sec / 3600);
-        var m = Math.floor((sec % 3600) / 60);
-        return h + 'h ' + m + 'm';
-      }
-
-      function formatAge(ts) {
-        var diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-        if (diff < 60) return diff + 's ago';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-        var h = Math.floor(diff / 3600);
-        return h + 'h ago';
-      }
-
-      function relativeTime(ts) {
-        var diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-        if (diff < 60) return diff + 's ago';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-        return Math.floor(diff / 3600) + 'h ago';
+        try { sessionStorage.removeItem('mflow_dash'); } catch (_) {}
       }
 
       function esc(str) {
@@ -609,288 +597,340 @@ export function getDashboardHtml(): string {
         return d.innerHTML;
       }
 
-      // ─── UI State ───────────────────────────────────
+      function formatUptime(sec) {
+        if (sec < 60) return sec + 's';
+        if (sec < 3600) return Math.floor(sec / 60) + 'm';
+        return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'm';
+      }
+
+      function relativeTime(ts) {
+        var diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+        if (diff < 60) return diff + 's';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm';
+        return Math.floor(diff / 3600) + 'h';
+      }
 
       function updateUI() {
-        var authCard = document.getElementById('github-auth-card');
-        var accessBar = document.getElementById('access-bar');
+        var githubGate = document.getElementById('github-gate');
+        var roomGate = document.getElementById('room-gate');
         var loginRow = document.getElementById('login-row');
         var badgeRow = document.getElementById('room-badge-row');
-        var roomCard = document.getElementById('room-card');
-        var activityCard = document.getElementById('activity-card');
-        var publicCard = document.getElementById('public-card');
+        var roomData = document.getElementById('room-data');
+        var userInfo = document.getElementById('user-info');
+        if (authenticated) { userInfo.classList.remove('hidden'); } else { userInfo.classList.add('hidden'); }
 
         if (authRequired && !authenticated) {
-          authCard.classList.remove('hidden');
-          accessBar.classList.add('hidden');
-          roomCard.classList.add('hidden');
-          activityCard.classList.add('hidden');
-          publicCard.classList.remove('hidden');
-          publicCard.querySelector('.public-msg').textContent = authConfigured
-            ? 'Sign in with GitHub to view dashboard data'
-            : 'Dashboard auth is required but GitHub is not configured';
+          githubGate.classList.remove('hidden');
+          roomGate.classList.add('hidden');
+          roomData.classList.add('hidden');
           return;
         }
 
-        authCard.classList.add('hidden');
-        accessBar.classList.remove('hidden');
+        githubGate.classList.add('hidden');
+        roomGate.classList.remove('hidden');
 
         if (mode === 'room') {
           loginRow.classList.add('hidden');
           badgeRow.classList.remove('hidden');
-          roomCard.classList.remove('hidden');
-          activityCard.classList.remove('hidden');
-          publicCard.classList.add('hidden');
+          roomData.classList.remove('hidden');
         } else {
           loginRow.classList.remove('hidden');
           badgeRow.classList.add('hidden');
-          roomCard.classList.add('hidden');
-          activityCard.classList.add('hidden');
-          publicCard.classList.remove('hidden');
+          roomData.classList.add('hidden');
         }
-      }
-
-      // ─── Render Room ────────────────────────────────
-
-      function renderRooms(data) {
-        var container = document.getElementById('rooms-container');
-
-        if (!data.rooms || data.rooms.length === 0) {
-          container.innerHTML = '<div class="empty-activity">No active room</div>';
-          return;
-        }
-
-        var html = '';
-        for (var i = 0; i < data.rooms.length; i++) {
-          var room = data.rooms[i];
-
-          // Room badge name
-          document.getElementById('room-badge-name').textContent = room.id.substring(0, 8);
-
-          html += '<div class="room-info">';
-          html += '<span class="room-name">Room: ' + esc(room.id.substring(0, 8)) + '</span>';
-          html += '<span class="room-meta">Age: ' + formatAge(room.createdAt) + '</span>';
-          html += '<span class="room-meta">Peers: ' + room.peerCount + '</span>';
-          html += '</div>';
-          html += '<div class="peers-row">';
-
-          for (var j = 0; j < room.peers.length; j++) {
-            var p = room.peers[j];
-            var tc = p.peerType === 'agent' ? 'agent' : 'human';
-            html += '<div class="peer-pill">';
-            html += '<span class="peer-pill-dot ' + tc + '"></span>';
-            html += '<span class="peer-pill-type ' + tc + '">[' + esc(p.peerType) + ']</span> ';
-            html += esc(p.peerName);
-            html += '</div>';
-          }
-
-          html += '</div>';
-        }
-
-        container.innerHTML = html;
-      }
-
-      // ─── Render Activity ────────────────────────────
-
-      function renderActivity(data) {
-        var feed = document.getElementById('activity-feed');
-
-        // Collect all activity entries from all rooms
-        var entries = [];
-        if (data.rooms) {
-          for (var i = 0; i < data.rooms.length; i++) {
-            var act = data.rooms[i].activity;
-            if (act) {
-              for (var j = 0; j < act.length; j++) entries.push(act[j]);
-            }
-          }
-        }
-
-        if (entries.length === 0) {
-          feed.innerHTML = '<div class="empty-activity">Waiting for activity...</div>';
-          return;
-        }
-
-        // Sort newest first
-        entries.sort(function(a, b) { return b.timestamp - a.timestamp; });
-
-        // Cap at 20
-        if (entries.length > 20) entries = entries.slice(0, 20);
-
-        var html = '';
-        for (var k = 0; k < entries.length; k++) {
-          var e = entries[k];
-          var entryId = e.timestamp + ':' + e.peerId + ':' + e.file;
-          var isNew = !knownActivityIds[entryId];
-          if (isNew) knownActivityIds[entryId] = true;
-
-          var cls = 'activity-row';
-          if (isNew && activityCount > 0) cls += ' new-entry entering';
-
-          html += '<div class="' + cls + '">';
-          html += '<span class="activity-time">' + relativeTime(e.timestamp) + '</span>';
-          html += '<span class="activity-peer">' + esc(e.peerName) + '</span>';
-          html += '<span class="activity-action ' + esc(e.action) + '">' + esc(e.action) + '</span>';
-          html += '<span class="activity-file" title="' + esc(e.file) + '">' + esc(e.file) + '</span>';
-          html += '</div>';
-        }
-
-        feed.innerHTML = html;
-        activityCount++;
-      }
-
-      // ─── Fetch ──────────────────────────────────────
-
-      function buildUrl() {
-        if (mode === 'room' && secretHash) return '/api/rooms?secretHash=' + encodeURIComponent(secretHash);
-        return '/api/rooms';
       }
 
       function refresh() {
-        if (authRequired && !authenticated) return;
-        fetch(buildUrl())
+        var request = mode === 'room' && secretHash
+          ? fetch('/api/rooms', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ secretHash: secretHash })
+            })
+          : fetch('/api/rooms');
+        request
           .then(function(res) {
+            if (res.status === 401) { authenticated = false; updateUI(); return; }
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.json();
           })
           .then(function(data) {
+            if (!data) return;
             consecutiveErrors = 0;
-            lastFetch = Date.now();
-
-            var dot = document.getElementById('status-dot');
-            dot.className = 'status-dot';
-            document.getElementById('status-text').textContent = 'OK';
+            document.getElementById('status-text').textContent = 'Online';
+            document.getElementById('status-text').style.color = 'var(--green)';
             document.getElementById('uptime').textContent = formatUptime(data.uptime);
             document.getElementById('room-count').textContent = data.totalRooms;
             document.getElementById('peer-count').textContent = data.totalPeers;
-            document.getElementById('memory').textContent = (data.memoryMB || 0) + 'MB';
-            document.getElementById('error-banner').style.display = 'none';
+            document.getElementById('error-banner').classList.add('hidden');
 
-            if (mode === 'room') {
-              renderRooms(data);
-              renderActivity(data);
+            if (mode === 'room' && data.rooms && data.rooms.length > 0) {
+              var room = data.rooms[0];
+              document.getElementById('active-room-id').textContent = 'Room: ' + room.id.substring(0, 16) + '...';
+
+              var pCont = document.getElementById('peers-container');
+              var pHtml = '';
+              room.peers.forEach(function(p) {
+                var tc = p.peerType === 'agent' ? 'agent' : 'human';
+                pHtml += '<div class="peer-chip"><span class="peer-type ' + tc + '">' + p.peerType + '</span>' + esc(p.peerName) + '</div>';
+              });
+              pCont.innerHTML = pHtml || '<span style="color:var(--text-muted)">No peers connected</span>';
+
+              var aCont = document.getElementById('activity-feed');
+              var aHtml = '';
+              var entries = room.activity || [];
+              entries.sort((a,b) => b.timestamp - a.timestamp).slice(0, 20).forEach(function(e) {
+                aHtml += '<div class="activity-row">';
+                aHtml += '<span class="activity-time">' + relativeTime(e.timestamp) + ' ago</span>';
+                aHtml += '<span class="activity-peer">' + esc(e.peerName) + '</span>';
+                aHtml += '<div><span class="activity-action action-' + e.action + '">' + e.action + '</span></div>';
+                aHtml += '<span class="activity-file" title="' + esc(e.file) + '">' + esc(e.file) + '</span>';
+                aHtml += '</div>';
+              });
+              aCont.innerHTML = aHtml || '<div style="color:var(--text-muted); padding: 20px 0;">No recent activity</div>';
+            } else if (mode === 'room') {
+               // Room empty or secret invalid
+               document.getElementById('active-room-id').textContent = 'Room empty or invalid secret';
+               document.getElementById('peers-container').innerHTML = '<span style="color:var(--text-muted)">No peers connected</span>';
+               document.getElementById('activity-feed').innerHTML = '<div style="color:var(--text-muted); padding: 20px 0;">No recent activity</div>';
             }
           })
           .catch(function(err) {
             consecutiveErrors++;
-            var dot = document.getElementById('status-dot');
-            dot.className = 'status-dot ' + (consecutiveErrors >= 3 ? 'error' : 'warning');
-            document.getElementById('status-text').textContent = consecutiveErrors >= 3 ? 'ERR' : '...';
-
-            var banner = document.getElementById('error-banner');
-            banner.textContent = err.message;
-            banner.style.display = 'block';
+            document.getElementById('status-text').textContent = 'Error';
+            document.getElementById('status-text').style.color = 'var(--red)';
           });
       }
-
-      function updateTimestamps() {
-        if (lastFetch === 0) return;
-        document.getElementById('last-updated').textContent = Math.floor((Date.now() - lastFetch) / 1000) + 's ago';
-
-        // Update relative times in activity feed
-        var times = document.querySelectorAll('.activity-time');
-        // Not worth re-rendering; times update on next poll
-      }
-
-      // ─── Events ─────────────────────────────────────
-
-      document.getElementById('login-btn').addEventListener('click', function() {
-        var val = document.getElementById('secret-input').value.trim();
-        if (!val) return;
-        sha256(val).then(function(hash) {
-          mode = 'room';
-          secretHash = hash;
-          knownActivityIds = {};
-          activityCount = 0;
-          saveSession();
-          updateUI();
-          refresh();
-        });
-      });
-
-      document.getElementById('secret-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') document.getElementById('login-btn').click();
-      });
-
-      document.getElementById('logout-btn').addEventListener('click', function() {
-        mode = 'public';
-        secretHash = null;
-        knownActivityIds = {};
-        activityCount = 0;
-        saveSession();
-        updateUI();
-        document.getElementById('secret-input').value = '';
-        document.getElementById('room-badge-name').textContent = '--';
-        refresh();
-      });
-
-      document.getElementById('github-login-btn').addEventListener('click', function() {
-        var box = document.getElementById('device-box');
-        box.classList.remove('hidden');
-        box.textContent = 'Starting GitHub device login...';
-
-        fetch('/api/auth/github/device/start', { method: 'POST' })
-          .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
-          .then(function(result) {
-            if (!result.ok) throw new Error(result.data.error || 'GitHub login failed');
-            var data = result.data;
-            box.innerHTML = 'Open <a href="' + esc(data.verificationUri) + '" target="_blank" rel="noreferrer" style="color:#10b981">' + esc(data.verificationUri) + '</a><br><span class="device-code">' + esc(data.userCode) + '</span><br>Waiting for GitHub approval...';
-            if (authPollTimer) clearInterval(authPollTimer);
-            authPollTimer = setInterval(function() {
-              fetch('/api/auth/github/device/poll', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ flowId: data.flowId })
-              })
-                .then(function(res) { return res.json().then(function(payload) { return { ok: res.ok, payload: payload }; }); })
-                .then(function(poll) {
-                  if (poll.payload.pending) return;
-                  if (!poll.ok) throw new Error(poll.payload.error || 'GitHub approval failed');
-                  clearInterval(authPollTimer);
-                  authPollTimer = null;
-                  authenticated = true;
-                  box.classList.add('hidden');
-                  updateUI();
-                  refresh();
-                })
-                .catch(function(err) {
-                  clearInterval(authPollTimer);
-                  authPollTimer = null;
-                  box.textContent = err.message;
-                });
-            }, Math.max(1, data.interval || 5) * 1000);
-          })
-          .catch(function(err) {
-            box.textContent = err.message;
-          });
-      });
 
       function loadAuthConfig() {
         return fetch('/api/auth/config')
           .then(function(res) { return res.json(); })
           .then(function(config) {
-            authRequired = Boolean(config.required);
-            authenticated = Boolean(config.authenticated);
-            authConfigured = Boolean(config.configured);
-          })
-          .catch(function() {
-            authRequired = false;
-            authenticated = false;
-            authConfigured = false;
+            authRequired = !!config.required;
+            authenticated = !!config.authenticated;
+            if (authenticated && config.user) {
+                document.getElementById('user-avatar').src = config.user.avatarUrl;
+                document.getElementById('user-login').textContent = config.user.login;
+            }
           });
       }
 
-      // ─── Init ───────────────────────────────────────
+      document.getElementById('login-btn').onclick = function() {
+        var val = document.getElementById('secret-input').value.trim();
+        if (!val) return;
+        sha256(val).then(function(hash) {
+          mode = 'room'; secretHash = hash;
+          saveSession(); updateUI(); refresh();
+        });
+      };
+
+      document.getElementById('secret-input').onkeydown = function(e) {
+        if (e.key === 'Enter') document.getElementById('login-btn').click();
+      };
+
+      document.getElementById('logout-btn').onclick = function() {
+        mode = 'public'; secretHash = null;
+        saveSession(); updateUI();
+        document.getElementById('secret-input').value = '';
+        refresh();
+      };
+
+      document.getElementById('github-login-btn').onclick = function() {
+        window.location.href = '/auth/github/start';
+      };
+
+      document.getElementById('auth-logout-btn').onclick = function(e) {
+        e.preventDefault();
+        fetch('/api/auth/logout', { method: 'POST' }).then(() => location.reload());
+      };
+
 
       loadSession();
       loadAuthConfig().then(function() {
         updateUI();
         refresh();
+        setInterval(refresh, 2000);
       });
-      setInterval(refresh, 2000);
-      setInterval(updateTimestamps, 1000);
     })();
   </script>
+</body>
+</html>`;
+}
+
+export function getDashboardAuthHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mflow dashboard sign in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08090d;
+      --panel: #111318;
+      --line: #252a33;
+      --text: #f5f7f2;
+      --muted: #9ca3af;
+      --green: #10b981;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at 50% 4%, rgba(16,185,129,.11), transparent 28%),
+        radial-gradient(rgba(148,163,184,.12) 1px, transparent 1px),
+        var(--bg);
+      background-size: auto, 24px 24px;
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(440px, 100%); }
+    .brand {
+      display: block;
+      width: fit-content;
+      margin: 0 auto 22px;
+      color: var(--text);
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -.04em;
+      text-decoration: none;
+    }
+    .card {
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: 0 24px 80px rgba(0,0,0,.42);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 23px;
+      line-height: 1.1;
+      letter-spacing: -.035em;
+    }
+    p {
+      margin: 0 0 24px;
+      max-width: 46ch;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border: 1px solid #303746;
+      border-radius: 10px;
+      background: #0c1016;
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 750;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .button:hover {
+      transform: translateY(-1px);
+      border-color: var(--green);
+      background: #141922;
+    }
+    .button svg { width: 18px; height: 18px; fill: currentColor; }
+    .device {
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #080a0f;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .device a { color: var(--text); text-decoration: underline; text-decoration-color: rgba(245,247,242,.35); text-underline-offset: 3px; }
+    .device a:hover { text-decoration-color: var(--green); }
+    .error-title { color: var(--red); font-weight: 800; margin-bottom: 6px; }
+    .note {
+      margin: 16px 0 0;
+      color: #6b7280;
+      font-size: 12px;
+      text-align: center;
+    }
+    .home {
+      display: block;
+      width: fit-content;
+      margin: 18px auto 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .home:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="brand" href="/">mflow</a>
+    <section class="card">
+      <h1>Dashboard sign in</h1>
+      <p>Sign in with GitHub, then enter your room secret to view room-scoped relay status.</p>
+      <a class="button" href="/auth/github/start" aria-label="Sign in with GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.92 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.6-2.81 5.61-5.49 5.91.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"/></svg>
+        Sign in with GitHub
+      </a>
+      <p class="note">Self-hosted relays can keep dashboard auth disabled.</p>
+    </section>
+    <a class="home" href="/" rel="noreferrer">Back to home</a>
+  </main>
+</body>
+</html>`;
+}
+
+export function getSettingsHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mflow settings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--bg:#08090b;--panel:rgba(24,24,27,.42);--line:rgba(255,255,255,.1);--line2:rgba(255,255,255,.18);--text:#f6f7f4;--muted:#9ca3af;--green:#34d399;--red:#f87171;--mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif}*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;background:radial-gradient(circle at 20% -10%,rgba(52,211,153,.12),transparent 32%),var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}a{color:inherit;text-decoration:none}.app-shell{min-height:100vh;display:grid;grid-template-columns:236px 1fr}.sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:28px 18px;border-right:1px solid var(--line);background:rgba(8,9,13,.74)}.side-brand{display:flex;align-items:center;gap:10px;color:var(--text);font-size:20px;font-weight:800;letter-spacing:-.045em;margin:0 10px 32px}.side-brand:before{content:'';width:9px;height:9px;border-radius:999px;background:var(--green);box-shadow:0 0 18px rgba(52,211,153,.9)}.side-nav{display:grid;gap:8px}.side-link{display:flex;align-items:center;gap:10px;min-height:42px;padding:0 12px;border:1px solid transparent;border-radius:12px;color:var(--muted);font-weight:750;transition:background .16s,border-color .16s,color .16s}.side-link svg{width:18px;height:18px;fill:currentColor}.side-link:hover,.side-link[aria-current=page]{color:var(--text);border-color:var(--line);background:rgba(255,255,255,.045)}.side-spacer{flex:1}.side-user{display:grid;gap:10px;padding-top:16px;border-top:1px solid var(--line)}.side-user-card{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.035)}.side-user-card img{width:30px;height:30px;border-radius:10px;border:1px solid var(--line)}.side-user-card span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800}.side-actions{display:flex;gap:8px}.side-actions a,.side-actions button{flex:1;min-height:38px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.035);color:var(--muted);font:inherit;font-weight:800;cursor:pointer}.side-actions a:hover,.side-actions button:hover{color:var(--text);border-color:var(--line2);background:rgba(255,255,255,.06)}.github-link svg{width:18px;height:18px;fill:currentColor}main{max-width:1180px;padding:46px 54px 80px}.back{display:inline-flex;align-items:center;gap:8px;width:fit-content;margin-bottom:30px;color:var(--muted);font-size:13px;font-weight:800}.back svg{width:17px;height:17px}.back:hover{color:var(--text)}.eyebrow{color:var(--green);font:700 12px var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}h1{font-size:clamp(38px,5vw,70px);line-height:1;letter-spacing:-.06em;margin-bottom:22px}p{color:var(--muted);font-size:16px;line-height:1.6}.hero{margin-bottom:48px;animation:rise .32s ease both}.grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:18px}.card{border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 20px 70px rgba(0,0,0,.28);padding:24px;animation:rise .38s ease both}.card h2{font-size:17px;margin-bottom:20px;letter-spacing:-.02em}.account{display:flex;align-items:center;gap:16px;margin-bottom:26px}.account img{width:58px;height:58px;border-radius:16px;border:1px solid var(--line2)}.account strong{display:block;font-size:20px}.form{display:grid;grid-template-columns:1fr auto auto;gap:10px;margin-bottom:20px}input,select{width:100%;background:#0b0d12;border:1px solid var(--line);border-radius:12px;color:var(--text);padding:12px 14px;font:inherit;outline:0}input:focus,select:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(52,211,153,.12)}.btn{border:0;border-radius:12px;background:#f6f7f4;color:#050607;padding:12px 16px;font:inherit;font-weight:850;cursor:pointer}.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}.btn.danger{background:rgba(248,113,113,.12);color:#fecaca;border:1px solid rgba(248,113,113,.22)}.key-once{display:none;margin:10px 0 18px;padding:14px;border:1px solid rgba(52,211,153,.28);background:rgba(52,211,153,.08);border-radius:14px}.key-once code{display:block;overflow:auto;font-family:var(--mono);font-size:13px;margin:8px 0}.row{display:grid;grid-template-columns:1fr 110px 110px 110px auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid rgba(255,255,255,.07);font-size:13px}.row .name{font-weight:750}.muted{color:var(--muted)}.suffix{font-family:var(--mono);color:var(--text)}.note{display:grid;gap:12px;color:var(--muted);font-size:14px}.note div{padding-left:14px;border-left:2px solid rgba(52,211,153,.4)}.error{color:var(--red);font-size:13px;margin-top:10px}.empty{padding:22px 0;color:var(--muted);font-size:16px}@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@media(max-width:820px){.app-shell{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:16px;border-right:0;border-bottom:1px solid var(--line)}.side-brand{margin-bottom:14px}.side-nav{grid-template-columns:1fr 1fr}.side-spacer{display:none}.side-user{margin-top:12px}main{padding:28px 16px}.grid{grid-template-columns:1fr}.form{grid-template-columns:1fr}.row{grid-template-columns:1fr;gap:5px}}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <a href="/" class="side-brand">mflow</a>
+    <nav class="side-nav" aria-label="Settings navigation">
+      <a class="side-link" href="/dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h7V4H4v9Zm0 7h7v-5H4v5Zm9 0h7v-9h-7v9Zm0-16v5h7V4h-7Z"/></svg>Dashboard</a>
+      <a class="side-link" href="/settings" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2.4h-4L9.6 5a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg>Settings</a>
+    </nav>
+    <div class="side-spacer"></div>
+    <div class="side-user">
+      <div class="side-user-card" id="user-chip" hidden><img id="avatar" alt=""><span id="login"></span></div>
+      <div class="side-actions"><button id="logout">Sign out</button><a class="github-link" href="https://github.com/Obed0101/mflow" target="_blank" rel="noreferrer" aria-label="Open mflow on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.92 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.6-2.81 5.61-5.49 5.91.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"/></svg></a></div>
+    </div>
+  </aside>
+  <main>
+    <a class="back" href="/dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.8 5.3 9.1 12l6.7 6.7-1.4 1.4L6.3 12l8.1-8.1 1.4 1.4Z"></path></svg>Back to dashboard</a>
+    <section class="hero"><div class="eyebrow">Hosted settings</div><h1>Account and API keys.</h1><p>Create scoped hosted relay keys for CLI/admin room operations. Plaintext keys are shown once and never stored.</p></section>
+    <div class="grid"><section class="card"><h2>Account</h2><div class="account"><img id="account-avatar" alt=""><div><strong id="account-name">Loading…</strong><p id="account-login">GitHub-authenticated dashboard session.</p></div></div><div class="note"><div>Session cookie is HttpOnly, SameSite=Lax, and Secure on HTTPS.</div><div>Room secrets stay separate from hosted dashboard keys.</div><div>Revoke keys you no longer use. Expired keys are rejected server-side.</div></div></section><section class="card"><h2>API keys</h2><div class="form"><input id="key-name" placeholder="Key name, e.g. Work laptop"><select id="key-exp"><option value="7d">7 days</option><option value="1d">1 day</option><option value="3d">3 days</option><option value="1m">1 month</option><option value="6m">6 months</option><option value="1y">1 year</option><option value="never">Never</option></select><button class="btn" id="create">Create key</button></div><div class="key-once" id="key-once"><strong>Copy this key now. It will not be shown again.</strong><code id="key-plain"></code><button class="btn ghost" id="copy">Copy</button></div><div id="error" class="error"></div><div id="keys"></div></section></div>
+  </main>
+</div>
+<script>
+(function(){var user=null;function esc(v){var d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function fmt(ts){return ts?new Date(ts).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'Never'}function rel(ts){return ts?new Date(ts).toLocaleString():'Never'}function auth(){return fetch('/api/auth/config').then(r=>r.json()).then(c=>{if(c.required&&!c.authenticated){location.href='/dashboard';return}user=c.user||{login:'self-hosted',name:'Self-hosted admin',avatarUrl:''};document.getElementById('login').textContent=user.login;document.getElementById('account-name').textContent=user.name||user.login;document.getElementById('account-login').textContent='@'+user.login;['avatar','account-avatar'].forEach(id=>{var img=document.getElementById(id);if(user.avatarUrl)img.src=user.avatarUrl;else img.style.display='none'});document.getElementById('user-chip').hidden=false})}function load(){return fetch('/api/api-keys').then(r=>r.json()).then(d=>{var keys=d.keys||[];document.getElementById('keys').innerHTML=keys.length?keys.map(k=>'<div class="row"><div><div class="name">'+esc(k.name)+'</div><div class="muted">Created '+rel(k.createdAt)+'</div></div><div><div class="muted">Suffix</div><div class="suffix">••••'+esc(k.suffix)+'</div></div><div><div class="muted">Expires</div>'+fmt(k.expiresAt)+'</div><div><div class="muted">Last used</div>'+fmt(k.lastUsedAt)+'</div><button class="btn danger" data-revoke="'+esc(k.id)+'" '+(k.revokedAt?'disabled':'')+'>'+(k.revokedAt?'Revoked':'Revoke')+'</button></div>').join(''):'<div class="empty">No API keys yet.</div>';document.querySelectorAll('[data-revoke]').forEach(b=>b.onclick=function(){fetch('/api/api-keys/'+this.dataset.revoke+'/revoke',{method:'POST'}).then(load)})})}document.getElementById('create').onclick=function(){document.getElementById('error').textContent='';fetch('/api/api-keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('key-name').value,expiresIn:document.getElementById('key-exp').value})}).then(async r=>{var d=await r.json();if(!r.ok)throw new Error(d.error||'Failed to create key');document.getElementById('key-plain').textContent=d.plaintext;document.getElementById('key-once').style.display='block';document.getElementById('key-name').value='';return load()}).catch(e=>document.getElementById('error').textContent=e.message)};document.getElementById('copy').onclick=function(){navigator.clipboard.writeText(document.getElementById('key-plain').textContent||'')};document.getElementById('logout').onclick=function(){fetch('/api/auth/logout',{method:'POST'}).then(()=>location.href='/dashboard')};auth().then(load)})();
+</script>
 </body>
 </html>`;
 }

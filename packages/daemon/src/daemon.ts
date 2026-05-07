@@ -13,7 +13,7 @@ import type {
   PauseSource,
   PeerInfo,
   PeerType,
-} from "@mflow/shared";
+} from "../../shared/src/index.js";
 import {
   MFLOW_DIR,
   MFLOW_PID_FILE,
@@ -21,7 +21,7 @@ import {
   MFLOW_CONFIG_FILE,
   MflowConfigSchema,
   sha256,
-} from "@mflow/shared";
+} from "../../shared/src/index.js";
 import { SyncOrchestrator, type SyncStats } from "./sync.js";
 import { FileLockManager } from "./file-lock-manager.js";
 

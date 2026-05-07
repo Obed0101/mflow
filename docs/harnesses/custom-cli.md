@@ -16,6 +16,37 @@ Stop it when the workflow ends:
 mflow stop
 ```
 
+## MCP setup
+
+Use the stdio MCP server when the harness can load MCP tools:
+
+```json
+{
+  "mcpServers": {
+    "mflow": {
+      "command": "bunx",
+      "args": ["mflow-mcp", "--root", "/absolute/path/to/repo"]
+    }
+  }
+}
+```
+
+Use `MFLOW_PROJECT_ROOT` if the client cannot pass arguments:
+
+```json
+{
+  "mcpServers": {
+    "mflow": {
+      "command": "bunx",
+      "args": ["mflow-mcp"],
+      "env": {
+        "MFLOW_PROJECT_ROOT": "/absolute/path/to/repo"
+      }
+    }
+  }
+}
+```
+
 ## Recommended controls
 
 A harness can shell out to:

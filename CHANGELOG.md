@@ -4,9 +4,29 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.1] - 2026-05-07
+
+Patch release after the first npm publish.
+
+### Fixed
+
+- Fixed npm runtime packaging so the published `mflow` and `mflow-mcp` binaries can resolve dependencies outside the monorepo workspace.
+- Added root runtime dependencies required by the published package.
+
+### Added
+
+- Published `mflow-mcp` binary for MCP clients.
+- Added a portable agent skill at `skills/mflow/SKILL.md` with pause/resume/lock rules for safe AI-agent operation.
+- Added Cursor harness guide, harness index, and roadmap docs.
+
+### Changed
+
+- README is now compact, uses collapsible MCP setup sections, and documents Codex, Claude Code, Cursor, opencode, and custom MCP clients.
+- README now explains what happens if an agent forgets to pause before git operations.
+
 ## [0.1.0] - 2026-05-06
 
-Initial public OSS preparation release candidate.
+Initial public OSS release.
 
 ### Added
 
@@ -19,7 +39,7 @@ Initial public OSS preparation release candidate.
 - CLI UX polish: ASCII banner, grouped help, no-args guidance, `NO_COLOR`-safe display, and richer `mflow start` summary.
 - CLI UX integration tests.
 - Public documentation: quickstart, troubleshooting, limits, self-hosting, Deno Deploy, Bun/Docker, security model, and harness guides for Codex, Claude Code, opencode, and custom CLIs.
-- Hosted auth roadmap documentation for future GitHub OAuth/device authorization and future opt-in self-hosted local auth.
+- Hosted dashboard auth documentation for GitHub OAuth and future CLI device authorization.
 
 ### Changed
 
@@ -33,8 +53,6 @@ Initial public OSS preparation release candidate.
 - Docs warn that room secrets must be high entropy and shared out of band.
 - `npm pack --dry-run` excludes local runtime state and agent/private scaffolding.
 
-### Not included
+### Known issue
 
-- Hosted account login is not implemented.
-- `mflow login`, `mflow logout`, and `mflow whoami` are planned/future only.
-- No package has been published yet.
+- The initial `0.1.0` npm package did not resolve monorepo workspace runtime dependencies correctly when installed outside this repository. Use `0.1.1` or later.

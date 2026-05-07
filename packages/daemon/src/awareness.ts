@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
-import type { AwarenessData, PeerType, ConnectionQuality, ITransport } from "@mflow/shared";
-import { AWARENESS_BROADCAST_MS } from "@mflow/shared";
+import type { AwarenessData, PeerType, ConnectionQuality, ITransport } from "../../shared/src/index.js";
+import { AWARENESS_BROADCAST_MS } from "../../shared/src/index.js";
 
 // ─── Types ──────────────────────────────────────────────────
 

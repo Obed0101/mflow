@@ -2,12 +2,12 @@ import { EventEmitter } from "node:events";
 import { readFile, stat } from "node:fs/promises";
 import { relative, join } from "node:path";
 import chokidar from "chokidar";
-import type { WriteToken } from "@mflow/shared";
+import type { WriteToken } from "../../shared/src/index.js";
 import {
   WRITE_TOKEN_TTL_MS,
   DEFAULT_DEBOUNCE_MS,
-} from "@mflow/shared";
-import { shouldSync, type IgnoreFilter } from "@mflow/shared";
+} from "../../shared/src/index.js";
+import { shouldSync, type IgnoreFilter } from "../../shared/src/index.js";
 
 // ─── Write Registry ─────────────────────────────────────────
 

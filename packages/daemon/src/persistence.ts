@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile, readdir, unlink } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { createHash } from "node:crypto";
-import { MFLOW_CRDT_DIR, MFLOW_MANIFEST_FILE } from "@mflow/shared";
+import { MFLOW_CRDT_DIR, MFLOW_MANIFEST_FILE } from "../../shared/src/index.js";
 import type { ICRDTPersistence } from "./crdt.js";
 
 // ─── CRDTPersistence ────────────────────────────────────────

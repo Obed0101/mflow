@@ -8,13 +8,13 @@ import { MflowDaemon } from "../daemon/src/daemon.js";
 import { IPCServer, type IPCHandler } from "../daemon/src/ipc.js";
 import { WSRelayTransport } from "../daemon/src/ws-relay-transport.js";
 import { WeriftTransport } from "../daemon/src/transport.js";
-import type { ITransport, IPCResponse, PauseSource, FileLock } from "@mflow/shared";
+import type { ITransport, IPCResponse, PauseSource, FileLock } from "../shared/src/index.js";
 import {
   DEFAULT_SIGNALING_URL,
   DEFAULT_STUN_SERVERS,
   RECONNECT_MAX_DELAY_MS,
   MFLOW_SOCK_FILE,
-} from "@mflow/shared";
+} from "../shared/src/index.js";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";

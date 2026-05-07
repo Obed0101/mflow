@@ -1,6 +1,6 @@
 import { appendFile, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
-import { MFLOW_IGNORE_FILE } from "@mflow/shared";
+import { MFLOW_IGNORE_FILE } from "../../../shared/src/index.js";
 import { sendIPC, isDaemonRunning } from "../ipc-client.js";
 import { displaySuccess, displayError, displayInfo } from "../display.js";
 

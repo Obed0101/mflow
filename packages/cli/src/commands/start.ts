@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import {
   DEFAULT_SIGNALING_URL,
   MFLOW_PID_FILE,
-} from "@mflow/shared";
+} from "../../../shared/src/index.js";
 import { isDaemonRunning, sendIPC } from "../ipc-client.js";
 import { displayError, displayInfo, displayStartSummary, displayWarning } from "../display.js";
 import { ensureMflowDir } from "./init.js";
