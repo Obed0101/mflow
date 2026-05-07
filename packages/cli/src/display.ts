@@ -201,4 +201,7 @@ export function displayStartSummary(summary: StartSummary): void {
   console.log("");
   console.log("Stop:");
   console.log("  mflow stop");
+  console.log("");
+  console.log("Secret:");
+  console.log("  mflow secret --copy");
 }

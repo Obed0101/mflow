@@ -66,6 +66,10 @@ export async function startCommand(
       else displayWarning("Could not copy secret to clipboard automatically.");
     }
     console.log("");
+  } else if (options.copySecret) {
+    const copied = await copyToClipboard(secret);
+    if (copied) displayInfo("Existing room secret copied to clipboard.");
+    else displayWarning("Could not copy room secret to clipboard automatically.");
   }
 
   const signaling = firstNonEmpty(options.signaling, config.signaling) ?? DEFAULT_SIGNALING_URL;

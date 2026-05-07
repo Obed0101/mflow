@@ -10,6 +10,7 @@ import { resumeCommand } from "./commands/resume.js";
 import { ignoreCommand } from "./commands/ignore.js";
 import { initCommand } from "./commands/init.js";
 import { setupCommand } from "./commands/setup.js";
+import { secretCommand } from "./commands/secret.js";
 import { lockCommand } from "./commands/lock.js";
 import { unlockCommand } from "./commands/unlock.js";
 import { locksCommand } from "./commands/locks.js";
@@ -40,12 +41,14 @@ Command groups:
 
   Setup:
     mflow setup     Guided setup for room, relay, secrets, and MCP
+    mflow secret    Print/copy current room secret from .mflow/config.toml
     mflow init      Initialize .mflow/ directory
     mflow ignore    Add an ignore pattern
 
 Examples:
   mflow start --room project-x --secret "$MFLOW_SECRET"
   mflow status --watch
+  mflow secret --copy
   mflow stop
   mflow lock src/file.ts --duration 2m
 
@@ -204,6 +207,19 @@ program
   .action(async () => {
     try {
       await setupCommand(getProjectRoot());
+    } catch (err) {
+      displayError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command("secret")
+  .description("Print room secret, or copy it to clipboard")
+  .option("--copy", "Copy secret to clipboard")
+  .action(async (opts: { copy?: boolean }) => {
+    try {
+      await secretCommand(getProjectRoot(), { copy: opts.copy });
     } catch (err) {
       displayError(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;
