@@ -70,7 +70,8 @@ program
   .option("-s, --secret <key>", "Shared secret for encryption")
   .option("--signaling <url>", "Signaling server URL")
   .option("-t, --transport <type>", "Transport type: relay (default) or p2p", "relay")
-  .action(async (opts: { room?: string; secret?: string; signaling?: string; transport?: "relay" | "p2p" }) => {
+  .option("--copy-secret", "Copy generated secret to clipboard")
+  .action(async (opts: { room?: string; secret?: string; signaling?: string; transport?: "relay" | "p2p"; copySecret?: boolean }) => {
     try {
       await startCommand(getProjectRoot(), opts);
     } catch (err) {

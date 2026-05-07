@@ -568,7 +568,9 @@ export function getDashboardHtml(): string {
       var lastFetch = 0;
       var consecutiveErrors = 0;
       var mode = 'public';
+      var roomParam = null;
       var secretHash = null;
+      var hadActiveRoom = false;
       var knownActivityIds = {};
       var authRequired = false;
       var authenticated = false;
@@ -583,14 +585,40 @@ export function getDashboardHtml(): string {
         });
       }
 
+      function getUrlRoom() {
+        try {
+          return new URL(window.location.href).searchParams.get('room');
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function setUrlRoom(room) {
+        try {
+          var url = new URL(window.location.href);
+          if (room) {
+            url.searchParams.set('room', room);
+          } else {
+            url.searchParams.delete('room');
+          }
+          history.replaceState({}, '', url.toString());
+        } catch (_) {}
+      }
+
+      function storageKey(room) {
+        return room ? 'mflow_dash:' + room : 'mflow_dash';
+      }
+
       function loadSession() {
         try {
-          var raw = sessionStorage.getItem('mflow_dash');
+          roomParam = getUrlRoom();
+          var raw = sessionStorage.getItem(storageKey(roomParam));
           if (!raw) return;
           var saved = JSON.parse(raw);
           if (saved && saved.mode === 'room' && typeof saved.secretHash === 'string' && saved.secretHash.length === 64) {
             mode = 'room';
             secretHash = saved.secretHash;
+            if (saved.room) roomParam = saved.room;
           }
         } catch (_) {}
       }
@@ -598,9 +626,9 @@ export function getDashboardHtml(): string {
       function saveSession() {
         try {
           if (mode === 'room' && secretHash) {
-            sessionStorage.setItem('mflow_dash', JSON.stringify({ mode: mode, secretHash: secretHash }));
+            sessionStorage.setItem(storageKey(roomParam), JSON.stringify({ mode: mode, room: roomParam, secretHash: secretHash }));
           } else {
-            sessionStorage.removeItem('mflow_dash');
+            sessionStorage.removeItem(storageKey(roomParam));
           }
         } catch (_) {}
       }
@@ -694,31 +722,44 @@ export function getDashboardHtml(): string {
       }
 
       function refresh() {
-        var request = mode === 'room' && secretHash
+        var globalRequest = fetch('/api/rooms')
+          .then(function(res) {
+            if (res.status === 401) { authenticated = false; updateUI(); return null; }
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+          });
+
+        var roomRequest = (mode === 'room' && secretHash)
           ? fetch('/api/rooms', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ secretHash: secretHash })
+            }).then(function(res) {
+              if (res.status === 401) { authenticated = false; updateUI(); return null; }
+              if (!res.ok) throw new Error('HTTP ' + res.status);
+              return res.json();
             })
-          : fetch('/api/rooms');
-        request
-          .then(function(res) {
-            if (res.status === 401) { authenticated = false; updateUI(); return; }
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.json();
-          })
-          .then(function(data) {
-            if (!data) return;
+          : Promise.resolve(null);
+
+        Promise.all([globalRequest, roomRequest])
+          .then(function(results) {
+            var globalData = results[0];
+            var roomData = results[1];
+            if (!globalData) return;
             consecutiveErrors = 0;
             document.getElementById('status-text').textContent = 'Online';
             document.getElementById('status-text').style.color = 'var(--green)';
-            document.getElementById('uptime').textContent = formatUptime(data.uptime);
-            document.getElementById('room-count').textContent = data.totalRooms;
-            document.getElementById('peer-count').textContent = data.totalPeers;
+            document.getElementById('uptime').textContent = formatUptime(globalData.uptime);
+            document.getElementById('room-count').textContent = globalData.totalRooms;
+            document.getElementById('peer-count').textContent = globalData.totalPeers;
             document.getElementById('error-banner').classList.add('hidden');
 
-            if (mode === 'room' && data.rooms && data.rooms.length > 0) {
-              var room = data.rooms[0];
+            if (mode === 'room' && roomData && roomData.rooms && roomData.rooms.length > 0) {
+              var room = roomData.rooms[0];
+              hadActiveRoom = true;
+              roomParam = room.id;
+              setUrlRoom(room.id);
+              saveSession();
               document.getElementById('active-room-id').textContent = 'Room: ' + room.id.substring(0, 16) + '...';
 
               var pCont = document.getElementById('peers-container');
@@ -754,6 +795,17 @@ export function getDashboardHtml(): string {
               var treeLines = buildTreeLines(changedFiles.map(function(entry) { return entry.file; }));
               treeCont.innerHTML = treeLines.length ? treeLines.join('') : '<div style="color:var(--text-muted);">No file tree yet</div>';
             } else if (mode === 'room') {
+               if (hadActiveRoom) {
+                 hadActiveRoom = false;
+                 mode = 'public';
+                 secretHash = null;
+                 setUrlRoom(null);
+                 saveSession();
+                 document.getElementById('error-banner').textContent = 'Room disconnected';
+                 document.getElementById('error-banner').classList.remove('hidden');
+                 updateUI();
+                 return;
+               }
                // Room empty or secret invalid
                document.getElementById('active-room-id').textContent = 'Room empty or invalid secret';
                document.getElementById('peers-container').innerHTML = '<span style="color:var(--text-muted)">No peers connected</span>';
@@ -786,8 +838,35 @@ export function getDashboardHtml(): string {
         var val = document.getElementById('secret-input').value.trim();
         if (!val) return;
         sha256(val).then(function(hash) {
-          mode = 'room'; secretHash = hash;
-          saveSession(); updateUI(); refresh();
+          secretHash = hash;
+          fetch('/api/rooms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ secretHash: secretHash })
+          })
+            .then(function(res) {
+              if (!res.ok) throw new Error('invalid');
+              return res.json();
+            })
+            .then(function(data) {
+              if (!data || !data.rooms || data.rooms.length === 0) {
+                throw new Error('invalid');
+              }
+              roomParam = data.rooms[0].id;
+              setUrlRoom(roomParam);
+              hadActiveRoom = true;
+              mode = 'room';
+              saveSession();
+              updateUI();
+              refresh();
+            })
+            .catch(function() {
+              mode = 'public';
+              secretHash = null;
+              document.getElementById('error-banner').textContent = 'Invalid secret or empty room';
+              document.getElementById('error-banner').classList.remove('hidden');
+              updateUI();
+            });
         });
       };
 
@@ -797,6 +876,7 @@ export function getDashboardHtml(): string {
 
       document.getElementById('logout-btn').onclick = function() {
         mode = 'public'; secretHash = null;
+        setUrlRoom(null);
         saveSession(); updateUI();
         document.getElementById('secret-input').value = '';
         refresh();

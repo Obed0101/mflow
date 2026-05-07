@@ -4,6 +4,20 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.7] - 2026-05-07
+
+Dashboard room-state and streamer safety patch.
+
+### Fixed
+
+- Dashboard now validates secret before entering room mode; invalid/empty room no longer appears as a successful room connect.
+- Dashboard now writes `?room=<roomId>` immediately after a successful connect and stores session per-room.
+- If a connected room disappears (for example after `mflow stop`), dashboard now exits room mode back to home with a `Room disconnected` message.
+
+### Changed
+
+- Added `mflow start --copy-secret` to copy generated room secret to clipboard for safer on-stream workflows.
+
 ## [0.1.6] - 2026-05-07
 
 Dashboard persistence and activity visibility patch.

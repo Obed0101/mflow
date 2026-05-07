@@ -21,6 +21,7 @@ interface StartOptions {
   secret?: string;
   signaling?: string;
   transport?: TransportType;
+  copySecret?: boolean;
 }
 
 // ─── Start Command ──────────────────────────────────────────
@@ -49,8 +50,8 @@ export async function startCommand(
 
   // Determine room and secret
   const config = await readStartConfig(projectRoot);
-  const room = options.room ?? config.room ?? await deriveRoomId(projectRoot);
-  let secret = options.secret ?? process.env["MFLOW_SECRET"] ?? config.secret ?? "";
+  const room = firstNonEmpty(options.room, config.room) ?? await deriveRoomId(projectRoot);
+  let secret = firstNonEmpty(options.secret, process.env["MFLOW_SECRET"], config.secret) ?? "";
   const generatedSecret = !secret;
 
   if (generatedSecret) {
@@ -59,10 +60,15 @@ export async function startCommand(
     displayInfo("Generated secret — share with peers:");
     console.log(`  ${secret}`);
     displayWarning("This secret grants room access. Do not commit it or paste it into public logs.");
+    if (options.copySecret) {
+      const copied = await copyToClipboard(secret);
+      if (copied) displayInfo("Secret copied to clipboard.");
+      else displayWarning("Could not copy secret to clipboard automatically.");
+    }
     console.log("");
   }
 
-  const signaling = options.signaling ?? config.signaling ?? DEFAULT_SIGNALING_URL;
+  const signaling = firstNonEmpty(options.signaling, config.signaling) ?? DEFAULT_SIGNALING_URL;
   const transport = options.transport ?? "relay";
 
   // Spawn daemon as detached background process
@@ -123,6 +129,24 @@ export async function startCommand(
   }
 }
 
+async function copyToClipboard(secret: string): Promise<boolean> {
+  const platform = process.platform;
+  const copyCmd = platform === "darwin"
+    ? ["pbcopy"]
+    : platform === "win32"
+      ? ["clip"]
+      : ["xclip", "-selection", "clipboard"];
+  try {
+    const proc = spawn(copyCmd[0], copyCmd.slice(1), { stdio: ["pipe", "ignore", "ignore"] });
+    proc.stdin?.write(secret);
+    proc.stdin?.end();
+    const code: number = await new Promise((resolve) => proc.on("close", resolve));
+    return code === 0;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Helpers ────────────────────────────────────────────────
 
 /**
@@ -178,6 +202,13 @@ function readTomlString(content: string, key: string): string | undefined {
   const match = content.match(new RegExp(`^${key}\\s*=\\s*"((?:\\\\.|[^"])*)"`, "m"));
   if (!match) return undefined;
   return match[1].replaceAll('\\"', '"').replaceAll("\\\\", "\\");
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) return value;
+  }
+  return undefined;
 }
 
 async function waitForDaemonReady(
