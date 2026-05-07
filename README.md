@@ -46,6 +46,149 @@ Stop:
 mflow stop
 ```
 
+## First-time local setup
+
+If you do not want to handcraft room names, secrets, and relay URLs, start here:
+
+```bash
+mflow setup
+```
+
+What `mflow setup` does:
+
+- asks for a room name
+- lets you choose the hosted relay or a self-hosted URL
+- generates or accepts a room secret
+- optionally stores the secret in `.mflow/config.toml`
+- optionally stores a hosted dashboard API key in `.mflow/credentials.json`
+
+After `mflow setup`, most users only need:
+
+```bash
+mflow start
+```
+
+If you did **not** store the secret locally, start with:
+
+```bash
+MFLOW_SECRET="<room-secret>" mflow start --room <room-name>
+```
+
+## Normal CLI workflow
+
+Most daily usage is just these commands:
+
+```bash
+mflow start
+mflow status
+mflow status --watch
+mflow secret --copy
+mflow pause
+mflow resume
+mflow stop
+```
+
+What they are for:
+
+- `mflow start` — start or reconnect the local daemon for this worktree
+- `mflow status` — one-shot snapshot of room, peers, files, and recent activity
+- `mflow status --watch` — live terminal dashboard
+- `mflow secret --copy` — copy the current room secret from `.mflow/config.toml`
+- `mflow pause` — stop sending outgoing edits before risky operations like git commit/rebase/reset
+- `mflow resume` — resume sync and apply buffered changes
+- `mflow stop` — stop the daemon for this worktree
+
+## Typical onboarding flow
+
+### 1. Create or configure a room
+
+```bash
+mflow setup
+```
+
+### 2. Start sync in this worktree
+
+```bash
+mflow start
+```
+
+### 3. Watch what is happening
+
+```bash
+mflow status
+mflow status --watch
+```
+
+### 4. Open the hosted dashboard
+
+Run:
+
+```bash
+mflow secret --copy
+```
+
+Then open the relay dashboard and paste the same room secret there.
+
+The dashboard is room-scoped. It shows:
+
+- connected peers
+- recent activity
+- file tree
+- changed files
+
+It does **not** replace the daemon. Actual sync still happens between peers through mflow transports.
+
+### 5. Join from another worktree or machine
+
+If the second worktree already has `.mflow/config.toml`, run:
+
+```bash
+mflow start
+```
+
+If it does not, either run:
+
+```bash
+mflow setup
+```
+
+or join directly with the same room and secret:
+
+```bash
+mflow start --room my-project/main --secret "$MFLOW_SECRET"
+```
+
+### 6. Pause around git operations
+
+```bash
+mflow pause
+git add .
+git commit -m "your change"
+mflow resume
+```
+
+### 7. Stop cleanly when done
+
+```bash
+mflow stop
+```
+
+## Secrets and dashboard access
+
+The room secret is the shared key that lets peers join the same room.
+
+Common ways to work with it:
+
+```bash
+mflow secret
+mflow secret --copy
+```
+
+Use `mflow secret --copy` before opening `/dashboard` so you do not have to print the secret on screen.
+
+If your project stores the secret in `.mflow/config.toml`, `mflow start` can reuse it automatically.
+If your project does not store the secret locally, keep it in a password manager or export `MFLOW_SECRET` before starting.
+
 ## How it works
 
 1. A local daemon watches files in each worktree.
@@ -71,6 +214,15 @@ mflow ignore <pattern>      Add a pattern to .mflowignore
 mflow init                  Initialize .mflow config files
 ```
 
+Beginner-safe mental model:
+
+- `setup` prepares config
+- `start` runs the daemon
+- `status` tells you if sync is healthy
+- `secret` gets the room secret for dashboard/peers
+- `pause` and `resume` protect git operations
+- `stop` shuts the daemon down for this worktree
+
 Common start options:
 
 ```bash
@@ -82,6 +234,56 @@ mflow start \
 ```
 
 `--transport relay` is the public-ready default. `--transport p2p` exists for direct WebRTC-style transport experiments.
+
+## Common command recipes
+
+Start with the secret already stored:
+
+```bash
+mflow start
+```
+
+Start and copy the room secret to your clipboard:
+
+```bash
+mflow start --copy-secret
+```
+
+Join a room manually without local config:
+
+```bash
+mflow start --room my-project/main --secret "$MFLOW_SECRET"
+```
+
+Use a self-hosted relay:
+
+```bash
+mflow start --room my-project/main --secret "$MFLOW_SECRET" --signaling ws://localhost:8787
+```
+
+Inspect the daemon once:
+
+```bash
+mflow status
+```
+
+Keep a live terminal view open:
+
+```bash
+mflow status --watch
+```
+
+Copy the secret without printing it:
+
+```bash
+mflow secret --copy
+```
+
+Stop the current worktree daemon:
+
+```bash
+mflow stop
+```
 
 ## Agent and MCP setup
 
