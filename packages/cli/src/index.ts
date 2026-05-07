@@ -29,7 +29,7 @@ Command groups:
   Sync lifecycle:
     mflow start     Start sync daemon and join a room
     mflow stop      Stop sync daemon and persist state
-    mflow status    Show daemon status, peers, and sync stats
+    mflow status    Show daemon status, peers, sync stats, and recent activity
 
   Safety controls:
     mflow pause     Pause outgoing sync
@@ -46,7 +46,12 @@ Command groups:
 Examples:
   mflow start --room project-x --secret "$MFLOW_SECRET"
   mflow status --watch
+  mflow stop
   mflow lock src/file.ts --duration 2m
+
+Hosted dashboard:
+  Open /dashboard on the relay host and paste the same room secret.
+  The dashboard monitors room-scoped peers and recent activity, not a global project snapshot.
 
 Docs: https://github.com/Obed0101/mflow#readme
 `);

@@ -4,6 +4,20 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.6] - 2026-05-07
+
+Dashboard persistence and activity visibility patch.
+
+### Fixed
+
+- Fixed hosted dashboard room monitor persistence so refreshes keep the room-scoped session by storing only the `secretHash` in session storage.
+- Fixed the CLI/TUI status views to show real recent file activity instead of always falling back to "waiting for activity".
+
+### Changed
+
+- `mflow start`, `mflow status`, and no-args help now explain how to open the hosted dashboard, reuse the same room secret, and stop the local daemon with `mflow stop`.
+- Hosted dashboard room view now renders basic file tree and changed-files panels from recent room activity instead of placeholder copy.
+
 ## [0.1.5] - 2026-05-07
 
 Daemon startup and setup UX patch.

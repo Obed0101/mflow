@@ -312,8 +312,27 @@ export class Dashboard {
     lines.push(midBorder("Activity", w));
     lines.push(emptyBoxLine(w));
 
-    // Show merge warnings as activity, or "waiting" if none
-    if (status.mergeWarnings && status.mergeWarnings.length > 0) {
+    if (status.recentActivity && status.recentActivity.length > 0) {
+      const recent = status.recentActivity.slice(0, 6);
+      for (const entry of recent) {
+        if (entry.kind === "warning") {
+          lines.push(
+            boxLine(
+              `  ${red("\u26A0")} ${white(entry.path)} ${dim("\u2014")} ${entry.detail ?? "warning"}`,
+              w,
+            ),
+          );
+          continue;
+        }
+        const direction = entry.direction === "remote" ? cyan("remote") : green("local");
+        lines.push(
+          boxLine(
+            `  ${direction} ${white(entry.path)} ${dim("\u2014")} ${dim(formatTimeAgo(entry.timestamp))}`,
+            w,
+          ),
+        );
+      }
+    } else if (status.mergeWarnings && status.mergeWarnings.length > 0) {
       const recent = status.mergeWarnings.slice(-5);
       for (const warning of recent) {
         lines.push(

@@ -8,6 +8,7 @@ import type {
   DaemonStatus,
   FileLock,
   ITransport,
+  LocalActivityEntry,
   LockResponse,
   MflowConfig,
   PauseSource,
@@ -72,6 +73,7 @@ export interface DaemonEvents {
  * 4. Remove socket file
  */
 export class MflowDaemon extends EventEmitter {
+  private static readonly MAX_RECENT_ACTIVITY = 25;
   private sync: SyncOrchestrator | null = null;
   private readonly lockManager = new FileLockManager();
   private readonly transport: ITransport;
@@ -84,6 +86,7 @@ export class MflowDaemon extends EventEmitter {
   private readonly secret: string;
   private readonly peerName: string;
   private startTime: number = 0;
+  private readonly recentActivity: LocalActivityEntry[] = [];
   private shutdownInProgress = false;
   private signalHandlers: Array<{ signal: NodeJS.Signals; handler: () => void }> = [];
 
@@ -174,9 +177,22 @@ export class MflowDaemon extends EventEmitter {
       this.emit("state-changed", state);
     });
     this.sync.on("file-synced", (path: string, direction: "local" | "remote") => {
+      this.pushRecentActivity({
+        timestamp: Date.now(),
+        path,
+        direction,
+        kind: "synced",
+      });
       this.emit("file-synced", path, direction);
     });
     this.sync.on("sync-error", (path: string, error: Error) => {
+      this.pushRecentActivity({
+        timestamp: Date.now(),
+        path,
+        direction: "local",
+        kind: "warning",
+        detail: error.message,
+      });
       this.emit("sync-error", path, error);
     });
     this.sync.on("stats-update", (stats: SyncStats) => {
@@ -300,8 +316,16 @@ export class MflowDaemon extends EventEmitter {
       memoryUsageMB: Math.round(process.memoryUsage.rss() / 1_048_576),
       pauseReasons: this.sync?.getActivePauseReasons() ?? [],
       locks: this.lockManager.getAll(),
-      mergeWarnings: [],
+      mergeWarnings: this.sync?.getMergeWarnings() ?? [],
+      recentActivity: [...this.recentActivity].reverse(),
     };
+  }
+
+  private pushRecentActivity(entry: LocalActivityEntry): void {
+    this.recentActivity.push(entry);
+    if (this.recentActivity.length > MflowDaemon.MAX_RECENT_ACTIVITY) {
+      this.recentActivity.shift();
+    }
   }
 
   /**

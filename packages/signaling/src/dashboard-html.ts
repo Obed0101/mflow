@@ -550,11 +550,11 @@ export function getDashboardHtml(): string {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:28px;">
           <div style="border:1px solid var(--border);border-radius:10px;padding:18px;background:rgba(0,0,0,0.18);">
             <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">File tree</div>
-            <div style="font-size:13px;color:var(--text-muted);">Room file tree view will use the Trees renderer.</div>
+            <div id="file-tree" style="font-size:13px;color:var(--text-muted);display:grid;gap:6px;"></div>
           </div>
           <div style="border:1px solid var(--border);border-radius:10px;padding:18px;background:rgba(0,0,0,0.18);">
             <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Changed files</div>
-            <div style="font-size:13px;color:var(--text-muted);">Room diff view will use the Diffs renderer.</div>
+            <div id="changed-files" style="font-size:13px;color:var(--text-muted);display:grid;gap:8px;"></div>
           </div>
         </div>
       </div>
@@ -584,11 +584,25 @@ export function getDashboardHtml(): string {
       }
 
       function loadSession() {
-        try { sessionStorage.removeItem('mflow_dash'); } catch (_) {}
+        try {
+          var raw = sessionStorage.getItem('mflow_dash');
+          if (!raw) return;
+          var saved = JSON.parse(raw);
+          if (saved && saved.mode === 'room' && typeof saved.secretHash === 'string' && saved.secretHash.length === 64) {
+            mode = 'room';
+            secretHash = saved.secretHash;
+          }
+        } catch (_) {}
       }
 
       function saveSession() {
-        try { sessionStorage.removeItem('mflow_dash'); } catch (_) {}
+        try {
+          if (mode === 'room' && secretHash) {
+            sessionStorage.setItem('mflow_dash', JSON.stringify({ mode: mode, secretHash: secretHash }));
+          } else {
+            sessionStorage.removeItem('mflow_dash');
+          }
+        } catch (_) {}
       }
 
       function esc(str) {
@@ -608,6 +622,45 @@ export function getDashboardHtml(): string {
         if (diff < 60) return diff + 's';
         if (diff < 3600) return Math.floor(diff / 60) + 'm';
         return Math.floor(diff / 3600) + 'h';
+      }
+
+      function buildChangedFiles(entries) {
+        var latest = {};
+        entries.forEach(function(entry) {
+          var existing = latest[entry.file];
+          if (!existing || existing.timestamp < entry.timestamp) latest[entry.file] = entry;
+        });
+        return Object.values(latest).sort(function(a, b) { return b.timestamp - a.timestamp; });
+      }
+
+      function buildTreeLines(files) {
+        var root = {};
+        files.forEach(function(file) {
+          var parts = file.split('/').filter(Boolean);
+          var node = root;
+          for (var i = 0; i < parts.length; i++) {
+            var part = parts[i];
+            if (!node[part]) node[part] = { __children: {}, __leaf: i === parts.length - 1 };
+            if (i === parts.length - 1) {
+              node[part].__leaf = true;
+            } else {
+              node = node[part].__children;
+            }
+          }
+        });
+
+        var lines = [];
+        function walk(children, depth) {
+          Object.keys(children).sort().forEach(function(key) {
+            var item = children[key];
+            var indent = new Array(depth + 1).join('&nbsp;&nbsp;&nbsp;');
+            var icon = item.__leaf ? '•' : '▾';
+            lines.push('<div style="font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + indent + icon + ' ' + esc(key) + '</div>');
+            if (!item.__leaf) walk(item.__children, depth + 1);
+          });
+        }
+        walk(root, 0);
+        return lines;
       }
 
       function updateUI() {
@@ -688,11 +741,25 @@ export function getDashboardHtml(): string {
                 aHtml += '</div>';
               });
               aCont.innerHTML = aHtml || '<div style="color:var(--text-muted); padding: 20px 0;">No recent activity</div>';
+
+              var changedFiles = buildChangedFiles(entries);
+              var changedCont = document.getElementById('changed-files');
+              changedCont.innerHTML = changedFiles.length
+                ? changedFiles.slice(0, 12).map(function(entry) {
+                    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:var(--mono);"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(entry.file) + '</span><span class="activity-action action-' + entry.action + '">' + entry.action + '</span></div>';
+                  }).join('')
+                : '<div style="color:var(--text-muted);">No changed files yet</div>';
+
+              var treeCont = document.getElementById('file-tree');
+              var treeLines = buildTreeLines(changedFiles.map(function(entry) { return entry.file; }));
+              treeCont.innerHTML = treeLines.length ? treeLines.join('') : '<div style="color:var(--text-muted);">No file tree yet</div>';
             } else if (mode === 'room') {
                // Room empty or secret invalid
                document.getElementById('active-room-id').textContent = 'Room empty or invalid secret';
                document.getElementById('peers-container').innerHTML = '<span style="color:var(--text-muted)">No peers connected</span>';
                document.getElementById('activity-feed').innerHTML = '<div style="color:var(--text-muted); padding: 20px 0;">No recent activity</div>';
+               document.getElementById('changed-files').innerHTML = '<div style="color:var(--text-muted);">No changed files yet</div>';
+               document.getElementById('file-tree').innerHTML = '<div style="color:var(--text-muted);">No file tree yet</div>';
             }
           })
           .catch(function(err) {

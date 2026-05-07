@@ -80,6 +80,19 @@ export function displayStatus(status: DaemonStatus): void {
     console.log("");
     displayMergeWarnings(status.mergeWarnings);
   }
+
+  if (status.recentActivity && status.recentActivity.length > 0) {
+    console.log("");
+    console.log(colorize(bold, "  Recent activity:"));
+    for (const entry of status.recentActivity.slice(0, 8)) {
+      if (entry.kind === "warning") {
+        console.log(`    ${colorize(red, "⚠")} ${entry.path} ${colorize(dim, "—")} ${entry.detail ?? "warning"}`);
+        continue;
+      }
+      const direction = entry.direction === "remote" ? colorize(cyan, "remote") : colorize(green, "local");
+      console.log(`    ${colorize(dim, "●")} ${entry.path} ${colorize(dim, "(")}${direction}${colorize(dim, ")")}`);
+    }
+  }
 }
 
 export function displayPeers(peers: PeerInfo[]): void {
@@ -136,8 +149,12 @@ export function displayNoArgsHelp(): void {
   console.log("");
   console.log("Start here:");
   console.log("  mflow start                    Start sync in this repo");
-  console.log("  mflow status                   See peers, files, locks");
+  console.log("  mflow status                   See peers, files, locks, and recent activity");
+  console.log("  mflow stop                     Stop the local daemon cleanly");
   console.log("  mflow lock src/file.ts         Lock a hot file before editing");
+  console.log("");
+  console.log("Hosted dashboard:");
+  console.log("  Open /dashboard and paste the same room secret to monitor this room.");
   console.log("");
   console.log("Docs: https://github.com/Obed0101/mflow#readme");
 }
@@ -172,9 +189,16 @@ export function displayStartSummary(summary: StartSummary): void {
     displayInfo("A new secret was generated for this room; share it only out-of-band with trusted peers.");
   }
   console.log("");
+  console.log("Hosted dashboard:");
+  console.log("  Open /dashboard on the relay host and paste the same room secret.");
+  console.log("  The hosted monitor shows room-scoped peers and recent file activity.");
+  console.log("");
   console.log("Next peer:");
   console.log(`  mflow start --room ${summary.room} --secret <shared-secret> --signaling ${summary.signaling}`);
   console.log("");
   console.log("Monitor:");
   console.log("  mflow status --watch");
+  console.log("");
+  console.log("Stop:");
+  console.log("  mflow stop");
 }

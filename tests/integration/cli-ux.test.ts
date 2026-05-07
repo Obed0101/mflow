@@ -80,6 +80,7 @@ describe("CLI UX", () => {
         pauseReasons: [],
         locks: [],
         mergeWarnings: [],
+        recentActivity: [],
       });
     });
     if (previousNoColor === undefined) {

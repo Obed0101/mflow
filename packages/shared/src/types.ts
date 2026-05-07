@@ -67,6 +67,14 @@ export interface MergeWarning {
   timestamp: number;
 }
 
+export interface LocalActivityEntry {
+  timestamp: number;
+  path: string;
+  direction: "local" | "remote";
+  kind: "synced" | "warning";
+  detail?: string;
+}
+
 // ─── Daemon ──────────────────────────────────────────────────
 
 export type DaemonState =
@@ -90,6 +98,7 @@ export interface DaemonStatus {
   pauseReasons: PauseReason[];
   locks: FileLock[];
   mergeWarnings: MergeWarning[];
+  recentActivity: LocalActivityEntry[];
 }
 
 // ─── Manifest ────────────────────────────────────────────────
