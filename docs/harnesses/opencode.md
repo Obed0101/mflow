@@ -35,7 +35,7 @@ If your opencode setup supports stdio MCP servers, register mflow with the same 
   "mcpServers": {
     "mflow": {
       "command": "bunx",
-      "args": ["mflow-mcp", "--root", "/absolute/path/to/repo"]
+      "args": ["-p", "mflow-sdk", "mflow-mcp", "--root", "/absolute/path/to/repo"]
     }
   }
 }

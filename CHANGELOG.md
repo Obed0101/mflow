@@ -4,6 +4,18 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.2] - 2026-05-07
+
+Docs-only patch release for MCP setup clarity.
+
+### Fixed
+
+- Corrected one-shot MCP setup commands to use `bunx -p mflow-sdk mflow-mcp` because the npm package is `mflow-sdk` and the binary is `mflow-mcp`.
+
+### Added
+
+- Added explicit AI-agent guidance: agents must ask the human/project owner before installing, starting, or configuring mflow, MCP, or the portable skill.
+
 ## [0.1.1] - 2026-05-07
 
 Patch release after the first npm publish.

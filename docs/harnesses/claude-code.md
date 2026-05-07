@@ -40,7 +40,7 @@ mflow resume
 Use MCP for operational controls only. The core sync path should remain CLI + daemon + room secret so the workflow is portable across harnesses.
 
 ```bash
-claude mcp add mflow -- bunx mflow-mcp --root /absolute/path/to/repo
+claude mcp add mflow -- bunx -p mflow-sdk mflow-mcp --root /absolute/path/to/repo
 ```
 
 Recommended Claude Code instruction:
