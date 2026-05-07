@@ -15,11 +15,11 @@ const colorize = (fn: (s: string) => string, s: string): string => {
 };
 
 const BANNER = [
-  "           ___  __",
-  " _ __ ___ / _|| | _____      __",
-  "| '_ ` _ \\| |_ | |/ _ \\ \\ /\\ / /",
-  "| | | | | |  _|| | (_) |\\ V  V /",
-  "|_| |_| |_|_|  |_|\\___/  \\_/\\_/",
+  "             __ _",
+  " _ __ ___   / _| | _____      __",
+  "| '_ ` _ \\ | |_| |/ _ \\ \\ /\\ / /",
+  "| | | | | ||  _| | (_) \\ V  V /",
+  "|_| |_| |_||_| |_|\\___/ \\_/\\_/",
 ].join("\n");
 
 // ─── State Colors ───────────────────────────────────────────
@@ -126,7 +126,7 @@ export function displayMergeWarnings(warnings: MergeWarning[]): void {
 }
 
 export function getBanner(): string {
-  return BANNER.trimStart();
+  return BANNER;
 }
 
 export function displayNoArgsHelp(): void {

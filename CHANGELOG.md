@@ -4,6 +4,19 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.3] - 2026-05-07
+
+CLI polish patch.
+
+### Fixed
+
+- Replaced the broken ASCII banner with a readable `mflow` banner.
+- `mflow setup` no longer prints local absolute paths in the MCP command; it uses `--root .`.
+
+### Changed
+
+- `mflow setup` now derives the default room name from the current directory and explains what the room name is for.
+
 ## [0.1.2] - 2026-05-07
 
 Rename and setup release for the public CLI package.

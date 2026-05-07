@@ -1,7 +1,7 @@
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { DEFAULT_SIGNALING_URL, MFLOW_CONFIG_FILE, MFLOW_DIR } from "../../../shared/src/index.js";
 import { displayInfo, displaySuccess, displayWarning, getBanner } from "../display.js";
@@ -41,7 +41,7 @@ export async function setupCommand(projectRoot: string): Promise<void> {
     }
     console.log("");
     console.log("MCP:");
-    console.log(`  bunx -p mflow-cli mflow-mcp --root ${projectRoot}`);
+    console.log("  bunx -p mflow-cli mflow-mcp --root .");
   } finally {
     rl.close();
   }
@@ -50,7 +50,8 @@ export async function setupCommand(projectRoot: string): Promise<void> {
 async function collectSetupAnswers(
   rl: ReturnType<typeof createInterface>,
 ): Promise<SetupAnswers> {
-  const roomDefault = "my-project/main";
+  const roomDefault = basename(projectRoot) || "mflow-room";
+  console.log("Room names identify who can meet in the same sync session. Peers must use the same room and secret.");
   const room = normalizeAnswer(await rl.question(`Room name (${roomDefault}): `), roomDefault);
   const relayMode = normalizeAnswer(
     await rl.question("Relay: hosted free tier with fair-use limits, or self-hosted URL? (hosted/self-hosted): "),

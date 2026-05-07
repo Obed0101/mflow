@@ -45,7 +45,7 @@ describe("CLI UX", () => {
   test("no-args output has banner, value prop, and starter commands", () => {
     const output = runCli();
 
-    expect(output).toContain("___  __");
+    expect(output).toContain(" _ __ ___");
     expect(output).toContain("Real-time code sync for AI agent teams.");
     expect(output).toContain("mflow start");
     expect(output).toContain("mflow status");
