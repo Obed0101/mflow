@@ -6,15 +6,21 @@ This project follows a simple public release format. Dates use ISO format.
 
 ## [0.1.2] - 2026-05-07
 
-Docs-only patch release for MCP setup clarity.
+Rename and setup release for the public CLI package.
 
 ### Fixed
 
-- Corrected one-shot MCP setup commands to use `bunx -p mflow-sdk mflow-mcp` because the npm package is `mflow-sdk` and the binary is `mflow-mcp`.
+- Corrected one-shot MCP setup commands to use `bunx -p mflow-cli mflow-mcp` because the npm package is `mflow-cli` and the binary is `mflow-mcp`.
+- `mflow start` now honors room, secret, and signaling values from `.mflow/config.toml`.
 
 ### Added
 
 - Added explicit AI-agent guidance: agents must ask the human/project owner before installing, starting, or configuring mflow, MCP, or the portable skill.
+- Added `mflow setup`, a guided CLI setup for room, relay, secrets, optional hosted dashboard API key, and MCP command discovery.
+
+### Changed
+
+- Renamed the npm package from `mflow-sdk` to `mflow-cli`; the installed binaries remain `mflow` and `mflow-mcp`.
 
 ## [0.1.1] - 2026-05-07
 
@@ -55,7 +61,7 @@ Initial public OSS release.
 
 ### Changed
 
-- Root package name is `mflow-sdk`; the CLI binary remains `mflow`.
+- Root package name is `mflow-cli`; the CLI binary remains `mflow`.
 - Default CLI config now uses `wss://mflow-signal.obed0101.deno.net` instead of the previous placeholder relay URL.
 - Public docs now separate current OSS/self-host room-secret mode from future hosted account/device login.
 

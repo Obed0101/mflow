@@ -4,13 +4,13 @@ Mflow is being prepared for public OSS distribution. Do not publish npm packages
 
 ## Package naming
 
-The initial public npm package is planned as `mflow-sdk`, with the CLI binary named `mflow`.
+The initial public npm package is planned as `mflow-cli`, with the CLI binary named `mflow`.
 
 Before publishing, re-check registry state:
 
 ```bash
 npm view mflow name version description license repository --json || true
-npm view mflow-sdk name version description license repository --json || true
+npm view mflow-cli name version description license repository --json || true
 npm view @mflow/sdk name version description license repository --json || true
 ```
 

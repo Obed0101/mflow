@@ -5,11 +5,11 @@ Sync local worktrees so AI agents and humans stop overwriting each other.
 mflow runs a local daemon per worktree, watches file changes, and relays encrypted updates through a shared room. Use it when several agents, terminals, or machines are editing the same project and you want changes to appear before git becomes the conflict detector. Without it, parallel worktrees drift silently until someone discovers stale files, duplicated edits, or a bad merge at the worst moment.
 
 ```bash
-npm i -g mflow-sdk
+npm i -g mflow-cli
 mflow --help
 ```
 
-Package name: `mflow-sdk`. Installed binary: `mflow`.
+Package name: `mflow-cli`. Installed binary: `mflow`.
 
 ## Quick start
 
@@ -53,11 +53,7 @@ mflow stop
 3. The relay forwards encrypted updates and peer activity.
 4. Git remains the source of truth for history and review.
 
-The public relay is used by default:
-
-```text
-wss://mflow-signal.obed0101.deno.net
-```
+The hosted relay is used by default. Pass `--signaling` to use a self-hosted relay.
 
 ## CLI basics
 
@@ -70,6 +66,7 @@ mflow resume [--force]      Resume sync and apply buffered changes
 mflow lock <path>           Acquire a short file lock
 mflow unlock <path>         Release a file lock
 mflow locks                 List active file locks
+mflow setup                 Guided setup for room, relay, secrets, and MCP
 mflow ignore <pattern>      Add a pattern to .mflowignore
 mflow init                  Initialize .mflow config files
 ```
@@ -80,7 +77,7 @@ Common start options:
 mflow start \
   --room my-project/main \
   --secret "$MFLOW_SECRET" \
-  --signaling wss://mflow-signal.obed0101.deno.net \
+  --signaling <hosted-or-self-hosted-relay> \
   --transport relay
 ```
 
@@ -111,7 +108,7 @@ Ask which setup they want:
 <summary>Codex</summary>
 
 ```bash
-codex mcp add mflow -- bunx -p mflow-sdk mflow-mcp --root /absolute/path/to/repo
+codex mcp add mflow -- bunx -p mflow-cli mflow-mcp --root /absolute/path/to/repo
 ```
 
 Recommended agent rule: before commit/rebase/reset, call mflow pause; after tests and git operation, call mflow resume.
@@ -124,7 +121,7 @@ Full guide: [docs/harnesses/codex.md](./docs/harnesses/codex.md)
 <summary>Claude Code</summary>
 
 ```bash
-claude mcp add mflow -- bunx -p mflow-sdk mflow-mcp --root /absolute/path/to/repo
+claude mcp add mflow -- bunx -p mflow-cli mflow-mcp --root /absolute/path/to/repo
 ```
 
 Use MCP for operational controls only. Keep room secrets in the CLI/environment, not in prompts or logs.
@@ -143,7 +140,7 @@ Create `.cursor/mcp.json` in the repo or `~/.cursor/mcp.json` globally:
   "mcpServers": {
     "mflow": {
       "command": "bunx",
-      "args": ["-p", "mflow-sdk", "mflow-mcp", "--root", "${workspaceFolder}"]
+      "args": ["-p", "mflow-cli", "mflow-mcp", "--root", "${workspaceFolder}"]
     }
   }
 }
@@ -179,7 +176,7 @@ Use stdio:
   "mcpServers": {
     "mflow": {
       "command": "bunx",
-      "args": ["-p", "mflow-sdk", "mflow-mcp", "--root", "/absolute/path/to/repo"]
+      "args": ["-p", "mflow-cli", "mflow-mcp", "--root", "/absolute/path/to/repo"]
     }
   }
 }

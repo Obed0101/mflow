@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   DEFAULT_SIGNALING_URL,
+  MFLOW_CONFIG_FILE,
   MFLOW_PID_FILE,
 } from "../../../shared/src/index.js";
 import { isDaemonRunning, sendIPC } from "../ipc-client.js";
@@ -46,8 +47,9 @@ export async function startCommand(
   await ensureMflowDir(projectRoot);
 
   // Determine room and secret
-  const room = options.room ?? await deriveRoomId(projectRoot);
-  let secret = options.secret ?? "";
+  const config = await readStartConfig(projectRoot);
+  const room = options.room ?? config.room ?? await deriveRoomId(projectRoot);
+  let secret = options.secret ?? process.env["MFLOW_SECRET"] ?? config.secret ?? "";
   const generatedSecret = !secret;
 
   if (generatedSecret) {
@@ -59,7 +61,7 @@ export async function startCommand(
     console.log("");
   }
 
-  const signaling = options.signaling ?? DEFAULT_SIGNALING_URL;
+  const signaling = options.signaling ?? config.signaling ?? DEFAULT_SIGNALING_URL;
   const transport = options.transport ?? "relay";
 
   // Spawn daemon as detached background process
@@ -148,4 +150,23 @@ async function deriveRoomId(projectRoot: string): Promise<string> {
     // Not a git repo — use random room ID
     return randomBytes(8).toString("hex");
   }
+}
+
+async function readStartConfig(projectRoot: string): Promise<{ room?: string; secret?: string; signaling?: string }> {
+  try {
+    const content = await readFile(join(projectRoot, MFLOW_CONFIG_FILE), "utf-8");
+    return {
+      room: readTomlString(content, "room"),
+      secret: readTomlString(content, "secret"),
+      signaling: readTomlString(content, "signaling"),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function readTomlString(content: string, key: string): string | undefined {
+  const match = content.match(new RegExp(`^${key}\\s*=\\s*"((?:\\\\.|[^"])*)"`, "m"));
+  if (!match) return undefined;
+  return match[1].replaceAll('\\"', '"').replaceAll("\\\\", "\\");
 }

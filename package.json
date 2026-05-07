@@ -1,5 +1,5 @@
 {
-  "name": "mflow-sdk",
+  "name": "mflow-cli",
   "private": false,
   "version": "0.1.2",
   "description": "Sync local worktrees so AI agents and humans stop overwriting each other",

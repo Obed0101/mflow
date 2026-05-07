@@ -4,7 +4,7 @@ Use this checklist before making a public GitHub release or publishing npm packa
 
 ## Scope
 
-- Current package target: `mflow-sdk`.
+- Current package target: `mflow-cli`.
 - CLI binary: `mflow`.
 - Current auth model: no account, room + secret.
 - Hosted account/device login: planned/future only.
@@ -19,7 +19,7 @@ bun test
 scripts/check-public-release.sh
 npm pack --dry-run
 npm view mflow name version description license repository --json || true
-npm view mflow-sdk name version description license repository --json || true
+npm view mflow-cli name version description license repository --json || true
 npm view @mflow/sdk name version description license repository --json || true
 grep -RInE "(api[_-]?key|secret|token|password|BEGIN .*PRIVATE KEY|sk-|ghp_|github_pat_)" --exclude-dir=node_modules --exclude-dir=.git .
 ```
@@ -29,7 +29,7 @@ grep -RInE "(api[_-]?key|secret|token|password|BEGIN .*PRIVATE KEY|sk-|ghp_|gith
 As of the latest pre-release audit:
 
 - `mflow` exists on npm and is not this project.
-- `mflow-sdk` returned 404 and is the intended initial package name.
+- `mflow-cli` is the intended public package name.
 - `@mflow/sdk` returned 404, but scoped publish requires owning/configuring the npm scope.
 
 Re-run the npm checks immediately before publish. Registry state can change.

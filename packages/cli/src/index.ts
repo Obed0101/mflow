@@ -9,6 +9,7 @@ import { pauseCommand } from "./commands/pause.js";
 import { resumeCommand } from "./commands/resume.js";
 import { ignoreCommand } from "./commands/ignore.js";
 import { initCommand } from "./commands/init.js";
+import { setupCommand } from "./commands/setup.js";
 import { lockCommand } from "./commands/lock.js";
 import { unlockCommand } from "./commands/unlock.js";
 import { locksCommand } from "./commands/locks.js";
@@ -38,6 +39,7 @@ Command groups:
     mflow locks     List active file locks
 
   Setup:
+    mflow setup     Guided setup for room, relay, secrets, and MCP
     mflow init      Initialize .mflow/ directory
     mflow ignore    Add an ignore pattern
 
@@ -191,6 +193,18 @@ program
 // ── mflow init ──
 
 program
+  .command("setup")
+  .description("Guided setup for room, relay, secrets, and MCP")
+  .action(async () => {
+    try {
+      await setupCommand(getProjectRoot());
+    } catch (err) {
+      displayError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    }
+  });
+
+program
   .command("init")
   .description("Initialize .mflow/ directory with default config")
   .action(async () => {
@@ -207,5 +221,5 @@ program
 if (process.argv.slice(2).length === 0) {
   displayNoArgsHelp();
 } else {
-  program.parse();
+  await program.parseAsync();
 }

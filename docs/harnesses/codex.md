@@ -41,7 +41,7 @@ mflow includes an MCP server. Keep it thin: status, peers, pause/resume, and loc
 Install the MCP server for a repo:
 
 ```bash
-codex mcp add mflow -- bunx -p mflow-sdk mflow-mcp --root /absolute/path/to/repo
+codex mcp add mflow -- bunx -p mflow-cli mflow-mcp --root /absolute/path/to/repo
 ```
 
 Recommended Codex instruction:

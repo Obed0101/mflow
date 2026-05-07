@@ -155,8 +155,8 @@ export class MflowDaemon extends EventEmitter {
     await this.checkStalePid();
 
     // Resolve room ID from git if not provided
-    const roomId = this.roomId || (await this.autoDetectRoomId());
-    const secret = this.secret || crypto.randomUUID();
+    const roomId = this.roomId || this.config.sync.room || (await this.autoDetectRoomId());
+    const secret = this.secret || process.env["MFLOW_SECRET"] || this.config.sync.secret || crypto.randomUUID();
 
     // Write PID file
     await writeFile(this.pidFile, process.pid.toString(), "utf-8");

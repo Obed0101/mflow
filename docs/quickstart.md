@@ -14,7 +14,7 @@ This guide starts two peers in the same mflow room.
 Public package target:
 
 ```bash
-npm i -g mflow-sdk
+npm i -g mflow-cli
 ```
 
 From source:
@@ -33,11 +33,7 @@ export MFLOW_SECRET="$(openssl rand -hex 32)"
 mflow start --room my-project/main --secret "$MFLOW_SECRET"
 ```
 
-The default relay is:
-
-```text
-wss://mflow-signal.obed0101.deno.net
-```
+The hosted relay is used by default. Pass `--signaling` to use a self-hosted relay.
 
 ## Start the second peer
 

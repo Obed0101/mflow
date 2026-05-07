@@ -57,8 +57,8 @@ printf '\n'
 
 printf '== Package naming sanity ==\n'
 root_name="$(node -e "console.log(require('./package.json').name)")"
-if [[ "$root_name" != "mflow-sdk" ]]; then
-  fail "root package name should be mflow-sdk for the initial public package, got: $root_name"
+if [[ "$root_name" != "mflow-cli" ]]; then
+  fail "root package name should be mflow-cli for the public CLI package, got: $root_name"
 else
   printf 'ok root package name: %s\n' "$root_name"
 fi

@@ -24,7 +24,7 @@ Project-scoped config lives at `.cursor/mcp.json`. Global config lives at `~/.cu
   "mcpServers": {
     "mflow": {
       "command": "bunx",
-      "args": ["-p", "mflow-sdk", "mflow-mcp", "--root", "${workspaceFolder}"]
+      "args": ["-p", "mflow-cli", "mflow-mcp", "--root", "${workspaceFolder}"]
     }
   }
 }

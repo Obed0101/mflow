@@ -30,7 +30,7 @@ Ask whether they want CLI only, CLI + MCP, or CLI + MCP + skill installation.
 ## Quick start
 
 ```bash
-npm i -g mflow-sdk
+npm i -g mflow-cli
 export MFLOW_SECRET="$(openssl rand -hex 32)"
 mflow start --room <repo>/<branch-or-task> --secret "$MFLOW_SECRET"
 mflow status --watch
@@ -109,13 +109,13 @@ Use absolute project paths when possible. Replace `/path/to/repo` with the synce
 ### Codex
 
 ```bash
-codex mcp add mflow -- bunx -p mflow-sdk mflow-mcp --root /path/to/repo
+codex mcp add mflow -- bunx -p mflow-cli mflow-mcp --root /path/to/repo
 ```
 
 ### Claude Code
 
 ```bash
-claude mcp add mflow -- bunx -p mflow-sdk mflow-mcp --root /path/to/repo
+claude mcp add mflow -- bunx -p mflow-cli mflow-mcp --root /path/to/repo
 ```
 
 ### Cursor
@@ -127,7 +127,7 @@ Create `.cursor/mcp.json` in the repo or `~/.cursor/mcp.json` globally:
   "mcpServers": {
     "mflow": {
       "command": "bunx",
-      "args": ["-p", "mflow-sdk", "mflow-mcp", "--root", "${workspaceFolder}"]
+      "args": ["-p", "mflow-cli", "mflow-mcp", "--root", "${workspaceFolder}"]
     }
   }
 }
@@ -142,7 +142,7 @@ Use stdio:
   "mcpServers": {
     "mflow": {
       "command": "bunx",
-      "args": ["-p", "mflow-sdk", "mflow-mcp", "--root", "/path/to/repo"]
+      "args": ["-p", "mflow-cli", "mflow-mcp", "--root", "/path/to/repo"]
     }
   }
 }
