@@ -12,7 +12,7 @@ mflow keeps local worktrees synchronized while humans or AI agents edit. Treat i
 - Never print, commit, log, or paste room secrets/API keys.
 - Do not install, start, or configure mflow/MCP in a user's environment unless the human/project owner explicitly approves it.
 - Before commit/rebase/reset/branch surgery: pause mflow, inspect status and git diff, do the git operation, then resume.
-- Use locks for hot files before parallel edits: shared config, migrations, schemas, auth, package manifests, generated public docs.
+- Use queued locks for hot files before parallel edits: shared config, migrations, schemas, auth, package manifests, generated public docs.
 - If mflow is absent or stopped, do not assume peers are synced. Say so and continue with normal git safety.
 - Hosted accounts are optional. The core OSS workflow is room + strong shared secret.
 
@@ -54,7 +54,19 @@ mflow locks
 2. Lock high-conflict files before editing:
 
 ```bash
-mflow lock path/to/file --duration 2m
+mflow lock path/to/file --duration 2m --wait --timeout 60s --priority 0
+```
+
+For broad multi-file work, make a cooperative scope claim first:
+
+```bash
+mflow claim "packages/daemon/src/**" --timeout 2m --priority 0
+```
+
+For generated patch application, prefer the broker when available:
+
+```bash
+mflow apply-patch patch.txt --timeout 60s --priority 0
 ```
 
 3. Edit and verify normally.
@@ -100,7 +112,7 @@ MCP tools are for control, not for replacing the CLI sync model. Prefer these be
 - After git operation and tests: call resume.
 - If MCP fails, fall back to CLI commands.
 
-Expected mflow MCP tools include status, peers, pause, resume, lock, unlock, and locks.
+Expected mflow MCP tools include status, peers, pause, resume, lock, unlock, and locks. When available, pass wait/timeout/priority to lock calls so the tool waits for its turn instead of forcing the model to poll manually.
 
 ## MCP install snippets
 

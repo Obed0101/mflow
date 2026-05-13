@@ -1,17 +1,15 @@
 #!/usr/bin/env bun
 /**
  * Daemon entry point — spawned by `mflow start` as a detached process.
- * Wires MflowDaemon + WeriftTransport + IPCServer together.
+ * Wires MflowDaemon + relay transport + IPCServer together.
  */
 
 import { MflowDaemon } from "../daemon/src/daemon.js";
 import { IPCServer, type IPCHandler } from "../daemon/src/ipc.js";
 import { WSRelayTransport } from "../daemon/src/ws-relay-transport.js";
-import { WeriftTransport } from "../daemon/src/transport.js";
-import type { ITransport, IPCResponse, PauseSource, FileLock } from "../shared/src/index.js";
+import type { ITransport, IPCResponse, LockRequestOptions, PauseSource, FileLock } from "../shared/src/index.js";
 import {
   DEFAULT_SIGNALING_URL,
-  DEFAULT_STUN_SERVERS,
   RECONNECT_MAX_DELAY_MS,
   MFLOW_SOCK_FILE,
 } from "../shared/src/index.js";
@@ -44,14 +42,7 @@ const peerName = `${hostname()}-${process.pid}`;
 
 function createTransport(): ITransport {
   if (transportType === "p2p") {
-    return new WeriftTransport({
-      peerId,
-      peerName,
-      peerType: "agent",
-      signalingUrl,
-      stunServers: DEFAULT_STUN_SERVERS,
-      reconnectMaxDelayMs: RECONNECT_MAX_DELAY_MS,
-    });
+    throw new Error("P2P transport is disabled in this release; use --transport relay.");
   }
   return new WSRelayTransport({
     peerId,
@@ -105,9 +96,9 @@ const ipcHandler: IPCHandler = {
   async handleHealth(): Promise<IPCResponse> {
     return { type: "status", data: daemon.getStatus() };
   },
-  async handleLock(path: string, leaseDurationMs?: number, _source?: PauseSource): Promise<IPCResponse> {
+  async handleLock(path: string, options: LockRequestOptions = {}, _source?: PauseSource): Promise<IPCResponse> {
     try {
-      const result = daemon.acquireLock(path, leaseDurationMs);
+      const result = await daemon.acquireLock(path, options);
       return { type: "lock-result", data: result };
     } catch (err) {
       return { type: "error", message: err instanceof Error ? err.message : "Lock failed" };
@@ -125,7 +116,7 @@ const ipcHandler: IPCHandler = {
     return { type: "ok" };
   },
   async handleLockQuery(path?: string): Promise<IPCResponse> {
-    return { type: "locks", data: daemon.queryLocks(path) };
+    return { type: "locks", data: daemon.queryLocks(path), waiters: daemon.queryLockWaiters(path) };
   },
 };
 

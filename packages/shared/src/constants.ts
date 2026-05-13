@@ -21,6 +21,11 @@ export const GATE_DRAIN_INTERVAL_MS = 2_000;    // check drain every 2s
 export const DEFAULT_LEASE_MS = 30_000;          // 30s default lock lease
 export const MAX_LEASE_MS = 120_000;             // 2min max lease
 export const MAX_LOCKS = 100;                    // max concurrent locks per daemon
+export const MAX_LOCK_WAITERS = 100;             // max queued lock waiters per daemon
+export const DEFAULT_LOCK_WAIT_TIMEOUT_MS = 60_000;
+export const MAX_LOCK_WAIT_TIMEOUT_MS = 300_000;
+export const MIN_LOCK_PRIORITY = 0;
+export const MAX_LOCK_PRIORITY = 9;
 export const LOCK_EXPIRY_CHECK_MS = 5_000;       // check for expired locks every 5s
 
 // ─── Rate Limits ─────────────────────────────────────────────

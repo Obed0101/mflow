@@ -10,6 +10,9 @@ import { resumeCommand } from "./commands/resume.js";
 import { ignoreCommand } from "./commands/ignore.js";
 import { initCommand } from "./commands/init.js";
 import { setupCommand } from "./commands/setup.js";
+import { installHooksCommand } from "./commands/install-hooks.js";
+import { applyPatchCommand } from "./commands/apply-patch.js";
+import { claimCommand } from "./commands/claim.js";
 import { secretCommand } from "./commands/secret.js";
 import { lockCommand } from "./commands/lock.js";
 import { unlockCommand } from "./commands/unlock.js";
@@ -23,7 +26,7 @@ const program = new Command();
 program
   .name("mflow")
   .description("Real-time P2P code sync for AI agents and developers")
-  .version("0.1.0")
+  .version("0.1.10")
   .addHelpText("beforeAll", `${getBanner()}\n`)
   .addHelpText("afterAll", `
 Command groups:
@@ -44,6 +47,9 @@ Command groups:
     mflow secret    Print/copy current room secret from .mflow/config.toml
     mflow init      Initialize .mflow/ directory
     mflow ignore    Add an ignore pattern
+    mflow install-hooks Install Claude Code/OpenCode edit hooks
+    mflow apply-patch  Apply an apply_patch-format patch under queued locks
+    mflow claim     Reserve a scope/pattern cooperatively
 
 Examples:
   mflow start --room project-x --secret "$MFLOW_SECRET"
@@ -161,7 +167,10 @@ program
   .command("lock <path>")
   .description("Acquire a file lock to prevent sync collisions")
   .option("-d, --duration <duration>", "Lock lease duration (e.g., 30s, 2m)", "30s")
-  .action(async (path: string, opts: { duration?: string }) => {
+  .option("-w, --wait", "Wait until the lock is available")
+  .option("--timeout <duration>", "Maximum time to wait (e.g., 30s, 2m)", "60s")
+  .option("-p, --priority <number>", "Wait priority from 0 to 9 (higher wins, FIFO within same priority)", "0")
+  .action(async (path: string, opts: { duration?: string; wait?: boolean; timeout?: string; priority?: string }) => {
     try {
       await lockCommand(getProjectRoot(), path, opts);
     } catch (err) {
@@ -211,6 +220,40 @@ program
       displayError(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;
     }
+  });
+
+program
+  .command("install-hooks")
+  .description("Install optional harness hooks/plugins for coordinated edits")
+  .option("--harness <name>", "Harness to install: claude, opencode, or all", "all")
+  .option("-f, --force", "Overwrite generated hook/plugin files")
+  .action(async (opts: { harness?: "claude" | "opencode" | "all"; force?: boolean }) => {
+    try {
+      await installHooksCommand(getProjectRoot(), opts);
+    } catch (err) {
+      displayError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command("apply-patch <patch-file>")
+  .description("Apply an apply_patch-format patch after acquiring queued locks")
+  .option("--timeout <duration>", "Maximum time to wait for each lock", "60s")
+  .option("-d, --duration <duration>", "Lock lease duration", "30s")
+  .option("-p, --priority <number>", "Wait priority from 0 to 9", "0")
+  .action(async (patchFile: string, opts: { timeout?: string; duration?: string; priority?: string }) => {
+    await applyPatchCommand(getProjectRoot(), patchFile, opts);
+  });
+
+program
+  .command("claim <pattern>")
+  .description("Reserve a scope/pattern cooperatively using queued locks")
+  .option("--timeout <duration>", "Maximum time to wait", "120s")
+  .option("-d, --duration <duration>", "Claim lease duration", "2m")
+  .option("-p, --priority <number>", "Wait priority from 0 to 9", "0")
+  .action(async (pattern: string, opts: { timeout?: string; duration?: string; priority?: string }) => {
+    await claimCommand(getProjectRoot(), pattern, opts);
   });
 
 program

@@ -11,6 +11,15 @@ mflow --help
 
 Package name: `mflow-cli`. Installed binary: `mflow`.
 
+## Update
+
+```bash
+npm i -g mflow-cli@latest
+mflow --version
+```
+
+Expected version for this release: `0.1.10`.
+
 ## Quick start
 
 If you do not want to handcraft room names, secrets, and relay URLs, start here:
@@ -171,10 +180,13 @@ mflow stop                  Stop sync daemon and persist state
 mflow status [--watch]      Show peers, files, locks, and sync stats
 mflow pause                 Pause outgoing sync while continuing to receive
 mflow resume [--force]      Resume sync and apply buffered changes
-mflow lock <path>           Acquire a short file lock
+mflow lock <path>           Acquire a short file lock; add --wait to queue
 mflow unlock <path>         Release a file lock
 mflow locks                 List active file locks
 mflow setup                 Guided setup for room, relay, secrets, and MCP
+mflow install-hooks         Install optional Claude Code/OpenCode edit hooks
+mflow apply-patch           Apply an apply_patch-format patch under queued locks
+mflow claim <pattern>       Reserve a scope/pattern cooperatively
 mflow ignore <pattern>      Add a pattern to .mflowignore
 mflow init                  Initialize .mflow config files
 ```
@@ -188,6 +200,32 @@ Beginner-safe mental model:
 - `pause` and `resume` protect git operations
 - `stop` shuts the daemon down for this worktree
 
+Queued locks:
+
+```bash
+mflow lock src/hot-file.ts --duration 2m --wait --timeout 60s --priority 0
+```
+
+Higher priority waiters are granted first; waiters with the same priority are granted FIFO. Locks still have leases and expire if a peer dies. The daemon can coordinate and gate propagation; harness-specific hooks are required if you need to block a tool write before it touches the local filesystem.
+
+Optional harness hooks:
+
+```bash
+mflow install-hooks --harness claude
+mflow install-hooks --harness opencode
+```
+
+These project-local adapters acquire queued locks before supported edit tools run. They do not replace `mflow start`; keep the daemon running in every synced worktree.
+
+Patch broker and scope claims:
+
+```bash
+mflow apply-patch patch.txt --timeout 60s --priority 0
+mflow claim "packages/daemon/src/**" --timeout 2m --priority 0
+```
+
+`apply-patch` accepts Codex-style `*** Begin Patch` text and acquires queued locks for every changed file before applying it. `claim` is a cooperative scope reservation; use it before broad multi-file work, then still lock hot files before editing.
+
 Common start options:
 
 ```bash
@@ -198,7 +236,7 @@ mflow start \
   --transport relay
 ```
 
-`--transport relay` is the public-ready default. `--transport p2p` exists for direct WebRTC-style transport experiments.
+`--transport relay` is the public-ready default. `--transport p2p` is disabled in this release until the upstream WebRTC dependency chain no longer pulls a vulnerable `ip` package.
 
 ## Common command recipes
 
@@ -278,7 +316,7 @@ Ask which setup they want:
 codex mcp add mflow -- bunx -p mflow-cli mflow-mcp --root /absolute/path/to/repo
 ```
 
-Recommended agent rule: before commit/rebase/reset, call mflow pause; after tests and git operation, call mflow resume.
+Recommended agent rule: before hot-file edits, call `mflow lock <path> --wait --timeout 60s`; before commit/rebase/reset, call mflow pause; after tests and git operation, call mflow resume.
 
 Full guide: [docs/harnesses/codex.md](./docs/harnesses/codex.md)
 

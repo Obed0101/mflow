@@ -156,6 +156,9 @@ export const IPCRequestSchema = z.discriminatedUnion("type", [
     path: z.string().min(1).max(1024),
     leaseDurationMs: z.number().int().positive().max(120_000).optional(),
     source: PauseSourceSchema.optional(),
+    wait: z.boolean().optional(),
+    timeoutMs: z.number().int().positive().max(300_000).optional(),
+    priority: z.number().int().min(0).max(9).optional(),
   }),
   z.object({
     type: z.literal("unlock"),

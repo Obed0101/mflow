@@ -11,8 +11,7 @@
   },
   "dependencies": {
     "@mflow/shared": "workspace:*",
-    "chokidar": "^3.6.0",
-    "werift": "^0.19.0",
+    "chokidar": "^4.0.3",
     "y-protocols": "^1.0.6",
     "yjs": "^13.6.0"
   }

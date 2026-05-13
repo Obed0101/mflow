@@ -10,7 +10,7 @@
  *   LIMIT Peer limit         — 11th peer → ROOM_FULL
  *
  * Strategy: each describe block (and each rate-limit test) starts its own
- * Bun.serve instance on port 0 (OS-assigned, ephemeral).  This gives each
+ * Bun.serve instance on a high local port.  This gives each
  * test group a fresh RoomManager and RateLimiter so tests never share state.
  */
 
@@ -158,8 +158,7 @@ function startTestServer(): Server {
     }
   }
 
-  return Bun.serve<PeerContext>({
-    port: 0, // OS assigns a free port
+  return startBunServerWithRetry({
 
     fetch(req, server) {
       const url = new URL(req.url);
@@ -212,6 +211,19 @@ function startTestServer(): Server {
       },
     },
   });
+}
+
+function startBunServerWithRetry(options: Omit<Parameters<typeof Bun.serve<PeerContext>>[0], "port">): Server {
+  let lastError: unknown;
+  for (let i = 0; i < 20; i++) {
+    const port = 20_000 + ((process.pid + i + Math.floor(Math.random() * 10_000)) % 30_000);
+    try {
+      return Bun.serve<PeerContext>({ ...options, port });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Failed to start test server");
 }
 
 // ─── WebSocket client helpers ────────────────────────────────────────────────

@@ -60,6 +60,9 @@ describe("CLI UX", () => {
     expect(output).toContain("Sync lifecycle:");
     expect(output).toContain("Safety controls:");
     expect(output).toContain("Setup:");
+    expect(output).toContain("mflow install-hooks");
+    expect(output).toContain("mflow apply-patch");
+    expect(output).toContain("mflow claim");
     expect(output).toContain("Examples:");
     expect(output).toContain('mflow start --room project-x --secret "$MFLOW_SECRET"');
   });
@@ -79,6 +82,7 @@ describe("CLI UX", () => {
         memoryUsageMB: 42,
         pauseReasons: [],
         locks: [],
+        lockWaiters: [],
         mergeWarnings: [],
         recentActivity: [],
       });

@@ -21,6 +21,8 @@ export function registerStatusTools(server: McpServer, projectRoot: string): voi
             `Ops/sec: ${d.opsPerSecond}`,
             `Uptime: ${Math.floor(d.uptime / 1000)}s`,
             `Memory: ${d.memoryUsageMB.toFixed(1)} MB`,
+            `Locks: ${d.locks.length}`,
+            `Lock waiters: ${d.lockWaiters.length}`,
           ];
           return { content: [{ type: "text", text: lines.join("\n") }] };
         }

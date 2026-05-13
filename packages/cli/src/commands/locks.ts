@@ -8,10 +8,10 @@ export async function locksCommand(projectRoot: string): Promise<void> {
     const response = await sendIPC(projectRoot, { type: "lock-query" });
 
     if (response.type === "locks") {
-      if (response.data.length === 0) {
+      if (response.data.length === 0 && (response.waiters ?? []).length === 0) {
         displayInfo("No active locks");
       } else {
-        displayLocks(response.data);
+        displayLocks(response.data, response.waiters);
       }
     } else if (response.type === "error") {
       displayError(response.message);

@@ -361,6 +361,107 @@ describe("P6: Lock Limits", () => {
     expect(result.lock.expiresAt).toBeGreaterThanOrEqual(before + MAX_LEASE_MS);
     expect(result.lock.expiresAt).toBeLessThanOrEqual(after + MAX_LEASE_MS + 10);
   });
+
+  test("P6.4 — waiters acquire in FIFO order within the same priority", async () => {
+    manager.acquire("src/test.ts", "peer-a", "Peer A");
+
+    const first = manager.acquireQueued("src/test.ts", "peer-b", "Peer B", {
+      wait: true,
+      timeoutMs: 1_000,
+      priority: 3,
+    });
+    const second = manager.acquireQueued("src/test.ts", "peer-c", "Peer C", {
+      wait: true,
+      timeoutMs: 1_000,
+      priority: 3,
+    });
+
+    expect(manager.getWaiters("src/test.ts").map((w) => w.holderId)).toEqual(["peer-b", "peer-c"]);
+
+    manager.release("src/test.ts", "peer-a");
+    const firstResult = await first;
+    expect(firstResult.granted).toBe(true);
+    expect(firstResult.lock.holderId).toBe("peer-b");
+
+    manager.release("src/test.ts", "peer-b");
+    const secondResult = await second;
+    expect(secondResult.granted).toBe(true);
+    expect(secondResult.lock.holderId).toBe("peer-c");
+  });
+
+  test("P6.5 — higher-priority waiters acquire before lower-priority waiters", async () => {
+    manager.acquire("src/test.ts", "peer-a", "Peer A");
+
+    const low = manager.acquireQueued("src/test.ts", "peer-b", "Peer B", {
+      wait: true,
+      timeoutMs: 1_000,
+      priority: 1,
+    });
+    const high = manager.acquireQueued("src/test.ts", "peer-c", "Peer C", {
+      wait: true,
+      timeoutMs: 1_000,
+      priority: 8,
+    });
+
+    expect(manager.getWaiters("src/test.ts").map((w) => w.holderId)).toEqual(["peer-c", "peer-b"]);
+
+    manager.release("src/test.ts", "peer-a");
+    const highResult = await high;
+    expect(highResult.granted).toBe(true);
+    expect(highResult.lock.holderId).toBe("peer-c");
+
+    manager.release("src/test.ts", "peer-c");
+    const lowResult = await low;
+    expect(lowResult.granted).toBe(true);
+    expect(lowResult.lock.holderId).toBe("peer-b");
+  });
+
+  test("P6.6 — waiter timeout removes queued waiter", async () => {
+    manager.acquire("src/test.ts", "peer-a", "Peer A");
+
+    await expect(
+      manager.acquireQueued("src/test.ts", "peer-b", "Peer B", {
+        wait: true,
+        timeoutMs: 20,
+      }),
+    ).rejects.toThrow("Timed out waiting for lock on src/test.ts");
+
+    expect(manager.getWaiters("src/test.ts")).toHaveLength(0);
+  });
+
+  test("P6.7 — scope claim blocks matching file locks from other peers", () => {
+    manager.acquire("scope:packages/daemon/src/**", "peer-a", "Peer A");
+
+    const result = manager.acquire("packages/daemon/src/sync.ts", "peer-b", "Peer B");
+
+    expect(result.granted).toBe(false);
+    expect(result.lock.path).toBe("scope:packages/daemon/src/**");
+  });
+
+  test("P6.8 — releasing a scope claim grants matching queued file waiter", async () => {
+    manager.acquire("scope:packages/daemon/src/**", "peer-a", "Peer A");
+
+    const queued = manager.acquireQueued("packages/daemon/src/sync.ts", "peer-b", "Peer B", {
+      wait: true,
+      timeoutMs: 1_000,
+    });
+
+    manager.release("scope:packages/daemon/src/**", "peer-a");
+
+    const result = await queued;
+    expect(result.granted).toBe(true);
+    expect(result.lock.path).toBe("packages/daemon/src/sync.ts");
+    expect(result.lock.holderId).toBe("peer-b");
+  });
+
+  test("P6.9 — overlapping scope claims conflict conservatively", () => {
+    manager.acquire("scope:packages/**", "peer-a", "Peer A");
+
+    const result = manager.acquire("scope:packages/daemon/src/**", "peer-b", "Peer B");
+
+    expect(result.granted).toBe(false);
+    expect(result.lock.path).toBe("scope:packages/**");
+  });
 });
 
 // ─── P8: Force Unlock Auth ────────────────────────────────────────

@@ -24,6 +24,7 @@ export class GitDetector extends EventEmitter {
   private readonly gitDir: string;
   private readonly lockPath: string;
   private fsWatcher: FSWatcher | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private _isGitOperation = false;
 
   constructor(projectRoot: string) {
@@ -62,6 +63,10 @@ export class GitDetector extends EventEmitter {
     } catch {
       // .git directory doesn't exist — not a git repo, nothing to watch
     }
+
+    this.pollTimer = setInterval(() => {
+      void this.checkLock();
+    }, 50);
   }
 
   /**
@@ -86,6 +91,10 @@ export class GitDetector extends EventEmitter {
     if (this.fsWatcher) {
       this.fsWatcher.close();
       this.fsWatcher = null;
+    }
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
     }
     this.removeAllListeners();
   }

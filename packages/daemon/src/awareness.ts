@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { AwarenessData, PeerType, ConnectionQuality, ITransport } from "../../shared/src/index.js";
+import type { AwarenessData, PeerType, ConnectionQuality, FileLock, ITransport } from "../../shared/src/index.js";
 import { AWARENESS_BROADCAST_MS } from "../../shared/src/index.js";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -36,6 +36,7 @@ export class AwarenessManager extends EventEmitter {
 
   private currentFile: string | null = null;
   private editingFiles: string[] = [];
+  private heldLocks: FileLock[] = [];
   private connectionQuality: ConnectionQuality = "good";
   private broadcastTimer: ReturnType<typeof setInterval> | null = null;
   private transport: ITransport | null = null;
@@ -80,6 +81,14 @@ export class AwarenessManager extends EventEmitter {
   }
 
   /**
+   * Update currently held file locks for peer awareness.
+   */
+  setHeldLocks(locks: FileLock[]): void {
+    this.heldLocks = locks;
+    void this.broadcastNow();
+  }
+
+  /**
    * Update connection quality assessment.
    */
   setConnectionQuality(quality: ConnectionQuality): void {
@@ -96,6 +105,7 @@ export class AwarenessManager extends EventEmitter {
       peerType: this.peerType,
       currentFile: this.shareCurrentFile ? this.currentFile : null,
       editingFiles: this.editingFiles,
+      heldLocks: this.heldLocks,
       connectionQuality: this.connectionQuality,
       timestamp: Date.now(),
     };
@@ -138,6 +148,38 @@ export class AwarenessManager extends EventEmitter {
       }
     }
     return editors;
+  }
+
+  /**
+   * Get remote locks currently advertised for a file.
+   */
+  getFileLocks(path: string): FileLock[] {
+    const now = Date.now();
+    const locks: FileLock[] = [];
+    for (const data of this.peers.values()) {
+      for (const lock of data.heldLocks ?? []) {
+        if (lock.path === path && lock.expiresAt > now) {
+          locks.push(lock);
+        }
+      }
+    }
+    return locks;
+  }
+
+  /**
+   * Get all remote locks advertised by peers.
+   */
+  getAllFileLocks(): FileLock[] {
+    const now = Date.now();
+    const locks: FileLock[] = [];
+    for (const data of this.peers.values()) {
+      for (const lock of data.heldLocks ?? []) {
+        if (lock.expiresAt > now) {
+          locks.push(lock);
+        }
+      }
+    }
+    return locks;
   }
 
   /**

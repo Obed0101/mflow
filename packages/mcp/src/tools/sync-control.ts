@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { sendIPC } from "../ipc-client.js";
+import { applyMflowPatch, getPatchPaths } from "../../../cli/src/patch-broker.js";
 
 export function registerSyncControlTools(server: McpServer, projectRoot: string): void {
   // Track MCP pause IDs so resume can clear the correct reason
@@ -14,13 +15,19 @@ export function registerSyncControlTools(server: McpServer, projectRoot: string)
     {
       path: z.string().min(1).describe("Relative file path to lock (e.g., 'src/server.ts')"),
       lease_duration_ms: z.number().int().positive().max(120_000).optional().describe("Lock lease duration in ms (default 30000, max 120000)"),
+      wait: z.boolean().optional().describe("Wait until the lock is available instead of returning immediately when denied"),
+      timeout_ms: z.number().int().positive().max(300_000).optional().describe("Maximum wait time in ms (default 60000, max 300000)"),
+      priority: z.number().int().min(0).max(9).optional().describe("Wait priority from 0 to 9; higher wins, FIFO within same priority"),
     },
-    async ({ path, lease_duration_ms }) => {
+    async ({ path, lease_duration_ms, wait, timeout_ms, priority }) => {
       try {
         const response = await sendIPC(projectRoot, {
           type: "lock",
           path,
           leaseDurationMs: lease_duration_ms,
+          wait,
+          timeoutMs: timeout_ms,
+          priority,
           source: "mcp",
         });
         if (response.type === "lock-result") {
@@ -86,14 +93,19 @@ export function registerSyncControlTools(server: McpServer, projectRoot: string)
         const response = await sendIPC(projectRoot, { type: "lock-query" });
         if (response.type === "locks") {
           const locks = response.data;
-          if (locks.length === 0) {
+          const waiters = response.waiters ?? [];
+          if (locks.length === 0 && waiters.length === 0) {
             return { content: [{ type: "text", text: "No active locks" }] };
           }
           const lines = locks.map((l) => {
             const remaining = Math.max(0, Math.ceil((l.expiresAt - Date.now()) / 1000));
             return `  ${l.path} — locked by ${l.holderName} (token: ${l.token}, expires in ${remaining}s)`;
           });
-          return { content: [{ type: "text", text: `Active locks:\n${lines.join("\n")}` }] };
+          const waiterLines = waiters.map((w) => {
+            const remaining = Math.max(0, Math.ceil((w.expiresAt - Date.now()) / 1000));
+            return `  ${w.path} — waiting: ${w.holderName} (priority ${w.priority}, timeout in ${remaining}s)`;
+          });
+          return { content: [{ type: "text", text: `Active locks:\n${[...lines, ...waiterLines].join("\n")}` }] };
         }
         if (response.type === "error") {
           return { content: [{ type: "text", text: `Error: ${response.message}` }], isError: true };
@@ -172,6 +184,53 @@ export function registerSyncControlTools(server: McpServer, projectRoot: string)
           return { content: [{ type: "text", text: `Error: ${response.message}` }], isError: true };
         }
         return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "mflow_apply_patch",
+    "Apply an apply_patch-format patch after acquiring queued mflow locks for every changed file",
+    {
+      patch_text: z.string().min(1).describe("Patch text in apply_patch format"),
+      timeout_ms: z.number().int().positive().max(300_000).optional().describe("Maximum wait time per lock in ms (default 60000)"),
+      priority: z.number().int().min(0).max(9).optional().describe("Wait priority from 0 to 9"),
+    },
+    async ({ patch_text, timeout_ms, priority }) => {
+      try {
+        const paths = getPatchPaths(patch_text);
+        if (paths.length === 0) {
+          return { content: [{ type: "text", text: "Patch contains no file changes" }], isError: true };
+        }
+
+        for (const path of paths) {
+          const response = await sendIPC(projectRoot, {
+            type: "lock",
+            path,
+            leaseDurationMs: 30_000,
+            wait: true,
+            timeoutMs: timeout_ms ?? 60_000,
+            priority: priority ?? 0,
+            source: "mcp",
+          });
+          if (response.type === "error") {
+            return { content: [{ type: "text", text: response.message }], isError: true };
+          }
+          if (response.type !== "lock-result" || !response.data.granted) {
+            return { content: [{ type: "text", text: `Could not acquire lock for ${path}` }], isError: true };
+          }
+        }
+
+        const changed = await applyMflowPatch(projectRoot, patch_text);
+        for (const path of paths) {
+          await sendIPC(projectRoot, { type: "unlock", path, source: "mcp" }).catch(() => undefined);
+        }
+        return { content: [{ type: "text", text: `Applied patch to ${changed.length} file${changed.length === 1 ? "" : "s"}: ${changed.join(", ")}` }] };
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],

@@ -1,4 +1,4 @@
-import type { DaemonStatus, PeerInfo, DaemonState, FileLock, MergeWarning } from "../../shared/src/index.js";
+import type { DaemonStatus, PeerInfo, DaemonState, FileLock, FileLockWaiter, MergeWarning } from "../../shared/src/index.js";
 
 // ─── ANSI Colors ────────────────────────────────────────────
 
@@ -71,9 +71,9 @@ export function displayStatus(status: DaemonStatus): void {
     displayPeers(status.peers);
   }
 
-  if (status.locks && status.locks.length > 0) {
+  if ((status.locks && status.locks.length > 0) || (status.lockWaiters && status.lockWaiters.length > 0)) {
     console.log("");
-    displayLocks(status.locks);
+    displayLocks(status.locks, status.lockWaiters);
   }
 
   if (status.mergeWarnings && status.mergeWarnings.length > 0) {
@@ -150,13 +150,19 @@ export function displayRelayHints(options: RelayHintOptions): void {
   console.log("  mflow secret --copy");
 }
 
-export function displayLocks(locks: FileLock[]): void {
+export function displayLocks(locks: FileLock[], waiters: FileLockWaiter[] = []): void {
   console.log(colorize(bold, "  Locks:"));
   const now = Date.now();
   for (const lock of locks) {
     const remaining = Math.max(0, Math.ceil((lock.expiresAt - now) / 1000));
     console.log(
       `    ${colorize(yellow, "⊘")} ${lock.path} ${colorize(dim, "—")} ${lock.holderName} ${colorize(dim, `(${remaining}s remaining)`)}`,
+    );
+  }
+  for (const waiter of waiters) {
+    const remaining = Math.max(0, Math.ceil((waiter.expiresAt - now) / 1000));
+    console.log(
+      `    ${colorize(cyan, "…")} ${waiter.path} ${colorize(dim, "—")} ${waiter.holderName} waiting ${colorize(dim, `(priority ${waiter.priority}, timeout in ${remaining}s)`)}`,
     );
   }
 }

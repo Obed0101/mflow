@@ -6,7 +6,7 @@ import { displaySuccess, displayError } from "../display.js";
 export async function lockCommand(
   projectRoot: string,
   path: string,
-  options: { duration?: string },
+  options: { duration?: string; wait?: boolean; timeout?: string; priority?: string },
 ): Promise<void> {
   try {
     let leaseDurationMs: number | undefined;
@@ -18,11 +18,32 @@ export async function lockCommand(
         return;
       }
     }
+    let timeoutMs: number | undefined;
+    if (options.timeout) {
+      timeoutMs = parseDuration(options.timeout);
+      if (timeoutMs === undefined) {
+        displayError(`Invalid timeout: ${options.timeout} — use format like "30s", "60s", "2m"`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+    let priority: number | undefined;
+    if (options.priority !== undefined) {
+      priority = Number.parseInt(options.priority, 10);
+      if (!Number.isInteger(priority) || priority < 0 || priority > 9) {
+        displayError("Invalid priority — use an integer from 0 to 9");
+        process.exitCode = 1;
+        return;
+      }
+    }
 
     const response = await sendIPC(projectRoot, {
       type: "lock",
       path,
       leaseDurationMs,
+      wait: options.wait,
+      timeoutMs,
+      priority,
       source: "user",
     });
 

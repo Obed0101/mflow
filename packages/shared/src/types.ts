@@ -21,6 +21,7 @@ export interface AwarenessData {
   peerType: PeerType;
   currentFile: string | null;
   editingFiles: string[];
+  heldLocks?: FileLock[];
   connectionQuality: ConnectionQuality;
   timestamp: number;
 }
@@ -56,6 +57,23 @@ export interface FileLock {
 export interface LockResponse {
   granted: boolean;
   lock: FileLock;
+}
+
+export interface FileLockWaiter {
+  path: string;
+  waiterId: string;
+  holderId: string;
+  holderName: string;
+  priority: number;
+  requestedAt: number;
+  expiresAt: number;
+}
+
+export interface LockRequestOptions {
+  leaseDurationMs?: number;
+  wait?: boolean;
+  timeoutMs?: number;
+  priority?: number;
 }
 
 export type MergeWarningType = "duplicate-import" | "unbalanced-braces";
@@ -97,6 +115,7 @@ export interface DaemonStatus {
   memoryUsageMB: number;
   pauseReasons: PauseReason[];
   locks: FileLock[];
+  lockWaiters: FileLockWaiter[];
   mergeWarnings: MergeWarning[];
   recentActivity: LocalActivityEntry[];
 }
@@ -151,7 +170,7 @@ export type IPCRequest =
   | { type: "ignore"; pattern: string }
   | { type: "peers" }
   | { type: "health" }
-  | { type: "lock"; path: string; leaseDurationMs?: number; source?: PauseSource }
+  | { type: "lock"; path: string; leaseDurationMs?: number; source?: PauseSource; wait?: boolean; timeoutMs?: number; priority?: number }
   | { type: "unlock"; path: string; source?: PauseSource; force?: boolean }
   | { type: "lock-query"; path?: string };
 
@@ -159,7 +178,7 @@ export type IPCResponse =
   | { type: "status"; data: DaemonStatus }
   | { type: "peers"; data: PeerInfo[] }
   | { type: "lock-result"; data: LockResponse }
-  | { type: "locks"; data: FileLock[] }
+  | { type: "locks"; data: FileLock[]; waiters?: FileLockWaiter[] }
   | { type: "ok" }
   | { type: "error"; message: string };
 

@@ -7,8 +7,10 @@ import type {
   DaemonState,
   DaemonStatus,
   FileLock,
+  FileLockWaiter,
   ITransport,
   LocalActivityEntry,
+  LockRequestOptions,
   LockResponse,
   MflowConfig,
   PauseSource,
@@ -170,6 +172,7 @@ export class MflowDaemon extends EventEmitter {
       config: this.config,
       transport: this.transport,
       peerId: this.peerId,
+      lockManager: this.lockManager,
     });
 
     // Forward events
@@ -276,8 +279,9 @@ export class MflowDaemon extends EventEmitter {
   /**
    * Acquire a file lock. Returns grant/deny response.
    */
-  acquireLock(path: string, leaseDurationMs?: number): LockResponse {
-    return this.lockManager.acquire(path, this.peerId, this.peerName, leaseDurationMs);
+  async acquireLock(path: string, options: LockRequestOptions = {}): Promise<LockResponse> {
+    await this.waitForRemoteLock(path, options);
+    return this.lockManager.acquireQueued(path, this.peerId, this.peerName, options);
   }
 
   /**
@@ -291,11 +295,37 @@ export class MflowDaemon extends EventEmitter {
    * Query locks — all active locks or a specific file's lock.
    */
   queryLocks(path?: string): FileLock[] {
-    if (path) {
-      const lock = this.lockManager.getLock(path);
-      return lock ? [lock] : [];
+    const localLocks = path
+      ? (() => {
+          const lock = this.lockManager.getLock(path);
+          return lock ? [lock] : [];
+        })()
+      : this.lockManager.getAll();
+    const remoteLocks = this.sync?.getRemoteLocks(path) ?? [];
+    return [...localLocks, ...remoteLocks];
+  }
+
+  /**
+   * Query queued lock waiters.
+   */
+  queryLockWaiters(path?: string): FileLockWaiter[] {
+    return this.lockManager.getWaiters(path);
+  }
+
+  private async waitForRemoteLock(path: string, options: LockRequestOptions): Promise<void> {
+    const startedAt = Date.now();
+    const timeoutMs = options.timeoutMs ?? 60_000;
+    while (true) {
+      const remoteLock = this.sync?.getRemoteLocks(path)[0];
+      if (!remoteLock) return;
+      if (!options.wait) {
+        throw new Error(`Lock denied — ${path} is locked by ${remoteLock.holderName}`);
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        throw new Error(`Timed out waiting for remote lock on ${path}`);
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
     }
-    return this.lockManager.getAll();
   }
 
   // ─── Status ──────────────────────────────────────────────
@@ -315,7 +345,8 @@ export class MflowDaemon extends EventEmitter {
       uptime: this.startTime > 0 ? Date.now() - this.startTime : 0,
       memoryUsageMB: Math.round(process.memoryUsage.rss() / 1_048_576),
       pauseReasons: this.sync?.getActivePauseReasons() ?? [],
-      locks: this.lockManager.getAll(),
+      locks: this.queryLocks(),
+      lockWaiters: this.queryLockWaiters(),
       mergeWarnings: this.sync?.getMergeWarnings() ?? [],
       recentActivity: [...this.recentActivity].reverse(),
     };

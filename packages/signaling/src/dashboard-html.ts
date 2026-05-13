@@ -508,8 +508,8 @@ export function getDashboardHtml(): string {
         <span class="stat-value" id="peer-count">-</span>
       </div>
       <div class="stat-item">
-        <span class="stat-label">Uptime</span>
-        <span class="stat-value" id="uptime">--</span>
+        <span class="stat-label">Memory</span>
+        <span class="stat-value" id="memory-usage">--</span>
       </div>
     </div>
 
@@ -641,10 +641,8 @@ export function getDashboardHtml(): string {
         return d.innerHTML;
       }
 
-      function formatUptime(sec) {
-        if (sec < 60) return sec + 's';
-        if (sec < 3600) return Math.floor(sec / 60) + 'm';
-        return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'm';
+      function formatMemory(memoryMB) {
+        return memoryMB + ' MB';
       }
 
       function relativeTime(ts) {
@@ -766,7 +764,7 @@ export function getDashboardHtml(): string {
             consecutiveErrors = 0;
             document.getElementById('status-text').textContent = 'Online';
             document.getElementById('status-text').style.color = 'var(--green)';
-            document.getElementById('uptime').textContent = formatUptime(globalData.uptime);
+            document.getElementById('memory-usage').textContent = formatMemory(globalData.memoryMB);
             document.getElementById('room-count').textContent = globalData.totalRooms;
             document.getElementById('peer-count').textContent = globalData.totalPeers;
             document.getElementById('error-banner').classList.add('hidden');

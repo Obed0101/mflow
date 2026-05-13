@@ -7,7 +7,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import { unlink, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { existsSync } from "node:fs";
-import type { IPCRequest, IPCResponse, PauseSource, FileLock, LockResponse } from "../../shared/src/index.js";
+import type { IPCRequest, IPCResponse, LockRequestOptions, PauseSource } from "../../shared/src/index.js";
 import { IPCRequestSchema } from "../../shared/src/index.js";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -24,7 +24,7 @@ export interface IPCHandler {
   handleIgnore(pattern: string): Promise<IPCResponse>;
   handlePeers(): Promise<IPCResponse>;
   handleHealth(): Promise<IPCResponse>;
-  handleLock(path: string, leaseDurationMs?: number, source?: PauseSource): Promise<IPCResponse>;
+  handleLock(path: string, options?: LockRequestOptions, source?: PauseSource): Promise<IPCResponse>;
   handleUnlock(path: string, source?: PauseSource, force?: boolean): Promise<IPCResponse>;
   handleLockQuery(path?: string): Promise<IPCResponse>;
 }
@@ -202,7 +202,16 @@ export class IPCServer {
       case "health":
         return handler.handleHealth();
       case "lock":
-        return handler.handleLock(request.path, request.leaseDurationMs, request.source);
+        return handler.handleLock(
+          request.path,
+          {
+            leaseDurationMs: request.leaseDurationMs,
+            wait: request.wait,
+            timeoutMs: request.timeoutMs,
+            priority: request.priority,
+          },
+          request.source,
+        );
       case "unlock":
         return handler.handleUnlock(request.path, request.source, request.force);
       case "lock-query":

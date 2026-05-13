@@ -4,6 +4,32 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.10] - 2026-05-12
+
+### Added
+
+- Added queued locks with `--wait`, `--timeout`, and `--priority`, including FIFO ordering within priority.
+- Added `mflow install-hooks` for project-local Claude Code and OpenCode pre-edit lock adapters.
+- Added `mflow apply-patch` and MCP `mflow_apply_patch` to apply Codex-style patches under queued file locks.
+- Added `mflow claim` for cooperative scope reservations.
+
+### Fixed
+
+- Removed the experimental WebRTC/P2P runtime dependency from the public package because its upstream dependency chain still pulled a high-severity vulnerable `ip` package.
+- Shared the daemon lock manager with the sync orchestrator so CLI/MCP locks affect propagation gating.
+- Added polling fallback to `GitDetector` so `.git/index.lock` transitions are detected when `fs.watch` misses temp-directory events.
+- Updated signaling integration tests to avoid `Bun.serve({ port: 0 })`, which fails under Bun 1.3.13 in this environment.
+
+## [0.1.9] - 2026-05-07
+
+README onboarding and dashboard card cleanup.
+
+### Changed
+
+- README now leads with the real first-time CLI flow: `mflow setup`, `mflow start`, `mflow status`, `mflow status --watch`, `mflow secret --copy`, `mflow pause`, `mflow resume`, and `mflow stop`.
+- Removed the old duplicate quick-start block that assumed users already understood room/secret setup.
+- Dashboard stats card now shows relay memory usage instead of misleading instance uptime.
+
 ## [0.1.7] - 2026-05-07
 
 Dashboard room-state and streamer safety patch.

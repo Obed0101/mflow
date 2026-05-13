@@ -98,6 +98,7 @@ export interface SyncOrchestratorOptions {
   config: MflowConfig;
   transport: ITransport;
   peerId: string;
+  lockManager?: FileLockManager;
 }
 
 // ─── SyncOrchestrator ───────────────────────────────────────
@@ -164,7 +165,7 @@ export class SyncOrchestrator extends EventEmitter {
     this.persistence = new CRDTPersistence(options.projectRoot);
     this.manifest = new ManifestManager();
     this.git = new GitDetector(options.projectRoot);
-    this.locks = new FileLockManager();
+    this.locks = options.lockManager ?? new FileLockManager();
 
     // Watcher needs an IgnoreFilter — also used for remote write validation
     const filter = createDefaultFilter();
@@ -275,11 +276,17 @@ export class SyncOrchestrator extends EventEmitter {
     // ── Lock events → drain gate queue on release/expiry ──
 
     this.locks.on("lock-released", (path: string) => {
+      this.awareness.setHeldLocks(this.locks.getAll());
       this.drainFileQueue(path);
     });
 
     this.locks.on("lock-expired", (lock: FileLock) => {
+      this.awareness.setHeldLocks(this.locks.getAll());
       this.drainFileQueue(lock.path);
+    });
+
+    this.locks.on("lock-acquired", () => {
+      this.awareness.setHeldLocks(this.locks.getAll());
     });
 
     // ── Manifest → Transport ──
@@ -660,6 +667,14 @@ export class SyncOrchestrator extends EventEmitter {
     return [...this.mergeWarnings.values()];
   }
 
+  /**
+   * Get locks advertised by remote peers through awareness.
+   */
+  getRemoteLocks(path?: string): FileLock[] {
+    if (path) return this.awareness.getFileLocks(path);
+    return this.awareness.getAllFileLocks();
+  }
+
   // ─── Propagation Gate (Layer 1) ────────────────────────
 
   /**
@@ -678,6 +693,10 @@ export class SyncOrchestrator extends EventEmitter {
     // Check awareness — is another peer editing this file?
     const editors = this.awareness.getFileEditors(path);
     if (editors.length > 0) {
+      return true;
+    }
+
+    if (this.awareness.getFileLocks(path).length > 0) {
       return true;
     }
 
