@@ -4,6 +4,13 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.11] - 2026-05-12
+
+### Changed
+
+- Reduced npm package contents to the CLI/MCP runtime files only so optional relay dashboard assets and documentation URLs are not shipped in the install tarball.
+- Removed default STUN server strings while P2P transport is disabled.
+
 ## [0.1.10] - 2026-05-12
 
 ### Added

@@ -18,7 +18,7 @@ npm i -g mflow-cli@latest
 mflow --version
 ```
 
-Expected version for this release: `0.1.10`.
+Expected version for this release: `0.1.11`.
 
 ## Quick start
 

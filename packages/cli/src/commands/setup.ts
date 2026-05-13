@@ -142,10 +142,7 @@ broadcast_interval_ms = 5000
 share_current_file = true
 
 [transport]
-stun_servers = [
-  "stun:stun.l.google.com:19302",
-  "stun:stun.cloudflare.com:3478",
-]
+stun_servers = []
 reconnect_max_delay_ms = 30000
 `;
 

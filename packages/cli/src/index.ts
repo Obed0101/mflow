@@ -26,7 +26,7 @@ const program = new Command();
 program
   .name("mflow")
   .description("Real-time P2P code sync for AI agents and developers")
-  .version("0.1.10")
+  .version("0.1.11")
   .addHelpText("beforeAll", `${getBanner()}\n`)
   .addHelpText("afterAll", `
 Command groups:

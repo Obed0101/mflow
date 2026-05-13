@@ -1,7 +1,7 @@
 {
   "name": "mflow-cli",
   "private": false,
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Sync local worktrees so AI agents and humans stop overwriting each other",
   "homepage": "https://github.com/Obed0101/mflow#readme",
   "bugs": {
@@ -18,23 +18,17 @@
   "files": [
     "README.md",
     "CHANGELOG.md",
-    ".env.example",
     "LICENSE",
     "SECURITY.md",
-    "CONTRIBUTING.md",
-    "scripts/check-public-release.sh",
-    "skills/",
-    "docs/",
-    "packages/*/src/**",
-    "packages/*/package.json",
-    "packages/*/tsconfig.json",
+    "packages/cli/src/**",
+    "packages/cli/package.json",
     "packages/cli/daemon-entry.ts",
-    "packages/signaling/.dockerignore",
-    "packages/signaling/Dockerfile",
-    "packages/signaling/deno-deploy.ts",
-    "bunfig.toml",
-    "deno.jsonc",
-    "tsconfig.json"
+    "packages/daemon/src/**",
+    "packages/daemon/package.json",
+    "packages/mcp/src/**",
+    "packages/mcp/package.json",
+    "packages/shared/src/**",
+    "packages/shared/package.json"
   ],
   "workspaces": [
     "packages/*"

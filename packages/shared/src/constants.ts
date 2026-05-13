@@ -37,10 +37,7 @@ export const RATE_LIMIT_VIOLATIONS_BEFORE_DISCONNECT = 3;
 // ─── Networking ──────────────────────────────────────────────
 
 export const DEFAULT_SIGNALING_URL = "wss://mflow-signal.obed0101.deno.net";
-export const DEFAULT_STUN_SERVERS = [
-  "stun:stun.l.google.com:19302",
-  "stun:stun.cloudflare.com:3478",
-];
+export const DEFAULT_STUN_SERVERS: string[] = [];
 
 // ─── Paths ───────────────────────────────────────────────────
 
