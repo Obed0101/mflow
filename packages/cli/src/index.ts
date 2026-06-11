@@ -11,6 +11,7 @@ import { ignoreCommand } from "./commands/ignore.js";
 import { initCommand } from "./commands/init.js";
 import { setupCommand } from "./commands/setup.js";
 import { installHooksCommand } from "./commands/install-hooks.js";
+import { hookStatusCommand } from "./commands/hook-status.js";
 import { applyPatchCommand } from "./commands/apply-patch.js";
 import { claimCommand } from "./commands/claim.js";
 import { secretCommand } from "./commands/secret.js";
@@ -26,7 +27,7 @@ const program = new Command();
 program
   .name("mflow")
   .description("Real-time P2P code sync for AI agents and developers")
-  .version("0.1.11")
+  .version("0.1.12")
   .addHelpText("beforeAll", `${getBanner()}\n`)
   .addHelpText("afterAll", `
 Command groups:
@@ -47,7 +48,8 @@ Command groups:
     mflow secret    Print/copy current room secret from .mflow/config.toml
     mflow init      Initialize .mflow/ directory
     mflow ignore    Add an ignore pattern
-    mflow install-hooks Install Claude Code/OpenCode edit hooks
+    mflow install-hooks Install optional harness edit hooks and experimental scaffolds
+    mflow hook-status  Check which harness hooks are installed or still manual
     mflow apply-patch  Apply an apply_patch-format patch under queued locks
     mflow claim     Reserve a scope/pattern cooperatively
 
@@ -225,11 +227,24 @@ program
 program
   .command("install-hooks")
   .description("Install optional harness hooks/plugins for coordinated edits")
-  .option("--harness <name>", "Harness to install: claude, opencode, or all", "all")
+  .option("--harness <name>", "Harness to install: claude, opencode, codex, mendcode, or all", "all")
   .option("-f, --force", "Overwrite generated hook/plugin files")
-  .action(async (opts: { harness?: "claude" | "opencode" | "all"; force?: boolean }) => {
+  .action(async (opts: { harness?: "claude" | "opencode" | "codex" | "mendcode" | "all"; force?: boolean }) => {
     try {
       await installHooksCommand(getProjectRoot(), opts);
+    } catch (err) {
+      displayError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command("hook-status")
+  .description("Check harness hook status and human-approval next steps")
+  .option("--harness <name>", "Harness to inspect: claude, opencode, codex, mendcode, or all", "all")
+  .action(async (opts: { harness?: "claude" | "opencode" | "codex" | "mendcode" | "all" }) => {
+    try {
+      await hookStatusCommand(getProjectRoot(), opts);
     } catch (err) {
       displayError(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;

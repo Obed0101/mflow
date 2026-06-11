@@ -186,6 +186,7 @@ export function displayNoArgsHelp(): void {
   console.log("Start here:");
   console.log("  mflow start                    Start sync in this repo");
   console.log("  mflow status                   See peers, files, locks, and recent activity");
+  console.log("  mflow hook-status              See which harness hooks are installed");
   console.log("  mflow stop                     Stop the local daemon cleanly");
   console.log("  mflow lock src/file.ts         Lock a hot file before editing");
   console.log("");

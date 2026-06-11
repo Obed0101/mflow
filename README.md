@@ -18,7 +18,7 @@ npm i -g mflow-cli@latest
 mflow --version
 ```
 
-Expected version for this release: `0.1.11`.
+Expected version for this release: `0.1.12`.
 
 ## Quick start
 
@@ -184,7 +184,8 @@ mflow lock <path>           Acquire a short file lock; add --wait to queue
 mflow unlock <path>         Release a file lock
 mflow locks                 List active file locks
 mflow setup                 Guided setup for room, relay, secrets, and MCP
-mflow install-hooks         Install optional Claude Code/OpenCode edit hooks
+mflow install-hooks         Install optional harness hooks and Codex scaffolds
+mflow hook-status          Check which harness hooks are installed or still manual
 mflow apply-patch           Apply an apply_patch-format patch under queued locks
 mflow claim <pattern>       Reserve a scope/pattern cooperatively
 mflow ignore <pattern>      Add a pattern to .mflowignore
@@ -211,11 +212,31 @@ Higher priority waiters are granted first; waiters with the same priority are gr
 Optional harness hooks:
 
 ```bash
+mflow hook-status
 mflow install-hooks --harness claude
 mflow install-hooks --harness opencode
+mflow install-hooks --harness codex
 ```
 
 These project-local adapters acquire queued locks before supported edit tools run. They do not replace `mflow start`; keep the daemon running in every synced worktree.
+Codex currently installs an experimental scaffold, not a verified universal hook. MendCode currently exposes an experimental scaffold only; do not treat it as verified support until the MendCode build proves the hook path works.
+
+## Agent approval flow
+
+If an AI agent notices that no repo-local mflow hook is configured for its harness, the correct behavior is:
+
+1. tell the human that optional coordinated edit hooks are available
+2. ask for approval before creating or changing harness integration files
+3. if the human approves, run `mflow install-hooks --harness <name>` for supported harnesses
+4. if the human does not approve, continue in manual coordination mode with `mflow lock`, `mflow claim`, `mflow pause`, and `mflow resume`
+
+Use this repo instruction block when you want agents to follow that flow:
+
+```text
+This repository uses mflow for optional coordinated editing. Before changing harness files or installing an mflow hook, call `mflow hook-status` and inspect the current harness state. If no hook is installed for the active harness, do not install anything automatically. Tell the human that an optional mflow hook is available, ask for approval, and only then run `mflow install-hooks --harness <supported-harness>`. If approval is not granted or the harness is not supported, continue in manual coordination mode with `mflow lock`, `mflow claim`, `mflow pause`, and `mflow resume`. Never print room secrets.
+```
+
+For harness authors, the canonical integration contract lives in `docs/harnesses/hook-contract.md`.
 
 Patch broker and scope claims:
 
@@ -308,6 +329,19 @@ Ask which setup they want:
 1. CLI only.
 2. CLI + MCP.
 3. CLI + MCP + the mflow skill installed in their agent runtime.
+
+MendCode has a repo-local experimental scaffold for pnpm-based MCP setup guidance and queued-lock pre-edit enforcement. The MendCode-side UI toggle still belongs in MendCode itself. Full guide: [docs/harnesses/mendcode.md](./docs/harnesses/mendcode.md).
+
+```bash
+mflow install-hooks --harness mendcode
+mflow hook-status --harness mendcode
+```
+
+Register MCP with pnpm only:
+
+```bash
+mend mcp add mflow -- pnpm --package=mflow-cli dlx mflow-mcp --root /absolute/path/to/repo
+```
 
 <details>
 <summary>Codex</summary>

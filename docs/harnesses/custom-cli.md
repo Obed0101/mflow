@@ -52,6 +52,7 @@ Use `MFLOW_PROJECT_ROOT` if the client cannot pass arguments:
 A harness can shell out to:
 
 ```bash
+mflow hook-status
 mflow status
 mflow pause
 mflow resume
@@ -59,6 +60,18 @@ mflow lock <path> --duration 2m
 mflow unlock <path>
 mflow locks
 ```
+
+## Human approval contract
+
+If the harness does not already have a repo-local mflow edit hook or adapter, the agent should not create one silently. The expected flow is:
+
+1. run `mflow hook-status`
+2. tell the human what is missing
+3. ask for approval before writing harness integration files
+4. if approved, install or generate the adapter
+5. otherwise continue with manual `lock`/`claim`/`pause`/`resume` coordination
+
+For the canonical adapter lifecycle and path rules, follow [hook-contract.md](./hook-contract.md).
 
 ## IPC concept
 

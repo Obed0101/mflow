@@ -61,6 +61,7 @@ describe("CLI UX", () => {
     expect(output).toContain("Safety controls:");
     expect(output).toContain("Setup:");
     expect(output).toContain("mflow install-hooks");
+    expect(output).toContain("mflow hook-status");
     expect(output).toContain("mflow apply-patch");
     expect(output).toContain("mflow claim");
     expect(output).toContain("Examples:");
@@ -120,5 +121,21 @@ describe("CLI UX", () => {
 
   test("custom signaling URL is labeled custom/self-hosted", () => {
     expect(classifyRelay("ws://localhost:8787")).toBe("custom/self-hosted relay");
+  });
+
+  test("hook-status explains approval-gated next steps", () => {
+    const output = runCli(["hook-status", "--harness", "codex"]);
+
+    expect(output).toContain("codex: ");
+    expect(output).toContain("no scaffold installed yet");
+    expect(output).toContain("Agent policy: ask the human before installing or changing any harness hook.");
+  });
+
+  test("hook-status supports MendCode harness", () => {
+    const output = runCli(["hook-status", "--harness", "mendcode"]);
+
+    expect(output).toContain("mendcode: ");
+    expect(output).toContain("MendCode scaffold not installed yet");
+    expect(output).toContain("mflow install-hooks --harness mendcode");
   });
 });

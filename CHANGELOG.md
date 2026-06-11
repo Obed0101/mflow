@@ -4,6 +4,13 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.12] - 2026-06-11
+
+### Added
+
+- Added an experimental MendCode harness scaffold with pnpm MCP guidance and queued-lock pre-edit adapter files.
+- Added `mflow hook-status --harness mendcode` reporting that distinguishes scaffold presence from verified MendCode-side enforcement.
+
 ## [0.1.11] - 2026-05-12
 
 ### Changed

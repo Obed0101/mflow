@@ -50,11 +50,33 @@ Recommended Codex instruction:
 When working in this repo, use mflow before coordinated edits. Call mflow status at task start, lock hot files with `mflow lock <path> --wait --timeout 60s` before parallel edits, pause before commit/rebase/reset, and resume after tests and git operations. Never print room secrets.
 ```
 
+Approval-gated hook prompt for agents:
+
+```text
+Call `mflow hook-status --harness codex` before trying to modify Codex harness files. If mflow reports that no verified Codex write hook installer exists yet, do not invent one automatically. Tell the human that Codex currently uses MCP + skill/manual coordination, explain that a hook adapter would require explicit approval, and ask whether they want you to build or configure that integration now. If the human says no, continue with manual mflow coordination only.
+```
+
+## Optional experimental scaffold
+
+If the human explicitly approves a Codex scaffold, install it with:
+
+```bash
+mflow install-hooks --harness codex
+```
+
+This writes:
+
+- `.codex/hooks/mflow-pre-edit.sh`
+- `.codex/mflow-agent-prompt.md`
+- `.codex/mflow-hook.example.toml`
+
+These files are intentionally not auto-wired by mflow because Codex hook semantics may vary by build. Use them as a reviewed starting point, then verify actual edit interception locally before relying on them. The shared rules for any harness adapter live in [hook-contract.md](./hook-contract.md).
+
 If your Codex setup supports skills, copy or symlink `skills/mflow/SKILL.md` into the runtime skill directory and mention the mflow skill in repo instructions.
 
 Codex integration is currently MCP/skill-first. Do not assume file-edit hooks block every write path unless the exact Codex version has been verified with `apply_patch` and shell-write tests.
 
-`mflow install-hooks` currently targets Claude Code and OpenCode. For Codex, keep using MCP/skill instructions until file-edit hook coverage is verified for the exact Codex build in use.
+`mflow install-hooks --harness codex` now creates an experimental scaffold only. Keep using MCP/skill instructions until file-edit hook coverage is verified for the exact Codex build in use.
 
 For Codex patch-heavy workflows, use the broker where possible:
 

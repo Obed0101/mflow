@@ -11,6 +11,7 @@ mflow keeps local worktrees synchronized while humans or AI agents edit. Treat i
 
 - Never print, commit, log, or paste room secrets/API keys.
 - Do not install, start, or configure mflow/MCP in a user's environment unless the human/project owner explicitly approves it.
+- Before creating or changing harness hook files, call `mflow hook-status` and ask for human approval if the active harness is still manual.
 - Before commit/rebase/reset/branch surgery: pause mflow, inspect status and git diff, do the git operation, then resume.
 - Use queued locks for hot files before parallel edits: shared config, migrations, schemas, auth, package manifests, generated public docs.
 - If mflow is absent or stopped, do not assume peers are synced. Say so and continue with normal git safety.
@@ -47,9 +48,13 @@ mflow start --room <repo>/<branch-or-task> --secret "$MFLOW_SECRET"
 1. Check sync state:
 
 ```bash
+mflow hook-status
 mflow status
 mflow locks
 ```
+
+If the active harness reports a missing hook, say that optional coordinated edit hooks are available, ask whether the human wants that installed now, and only then run `mflow install-hooks --harness <supported-harness>`.
+If the harness is Codex, explain that `mflow install-hooks --harness codex` creates an experimental scaffold that still needs local verification before relying on it.
 
 2. Lock high-conflict files before editing:
 
