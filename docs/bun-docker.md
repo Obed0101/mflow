@@ -9,10 +9,18 @@ bun install
 PORT=8787 bun run packages/signaling/src/index.ts
 ```
 
+This can run on your laptop, a spare machine on the same WiFi/LAN, a VPS, or any WebSocket-capable hosting service.
+
 Point the CLI at it:
 
 ```bash
 mflow start --room my-room --secret "$MFLOW_SECRET" --signaling ws://localhost:8787
+```
+
+From another computer on the same local network, replace `localhost` with the relay machine's LAN IP:
+
+```bash
+mflow start --room my-room --secret "$MFLOW_SECRET" --signaling ws://192.168.1.50:8787
 ```
 
 ## Build Docker image
@@ -45,3 +53,7 @@ mflow start --room my-room --secret "$MFLOW_SECRET" --signaling ws://localhost:8
 - Set `MFLOW_*` limits for your expected load.
 - Forward logs to your normal observability stack.
 - Do not expose internal-only relays publicly unless intended.
+
+## Hosting notes
+
+The relay needs long-lived WebSockets. Use Docker/VPS/Koyeb/Railway/Render/Fly.io or another service that keeps WebSocket upgrades open. Serverless-only platforms that terminate long requests are not a good fit for the relay itself.

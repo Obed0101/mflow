@@ -18,7 +18,7 @@ npm i -g mflow-cli@latest
 mflow --version
 ```
 
-Expected version for this release: `0.1.12`.
+Expected version for this release: `0.1.13`.
 
 ## Quick start
 
@@ -339,8 +339,23 @@ mflow hook-status --harness mendcode
 
 Register MCP with pnpm only:
 
+MendCode's current `mcp add` command is interactive. For product code, write the equivalent local MCP config:
+
+```json
+{
+  "mcp": {
+    "mflow": {
+      "type": "local",
+      "command": ["pnpm", "dlx", "--package", "mflow-cli", "mflow-mcp", "--root", "/absolute/path/to/repo"]
+    }
+  }
+}
+```
+
+For manual setup, run `mend mcp add`, choose local, use `mflow` as the server name, and enter:
+
 ```bash
-mend mcp add mflow -- pnpm --package=mflow-cli dlx mflow-mcp --root /absolute/path/to/repo
+pnpm dlx --package mflow-cli mflow-mcp --root /absolute/path/to/repo
 ```
 
 <details>
@@ -443,9 +458,31 @@ If unwanted synced files entered the commit, amend or revert before pushing.
 
 A portable mflow skill lives in [`skills/mflow/SKILL.md`](./skills/mflow/SKILL.md). Install or copy it into agent runtimes that support skills so agents know when to pause, resume, lock files, and use MCP safely.
 
+## Local-first relays
+
+For a free setup with no cloud dependency, run the mflow relay locally or on a machine in the same WiFi/LAN, then point each worktree at that relay.
+
+```bash
+PORT=8787 bun run packages/signaling/src/index.ts
+```
+
+Same machine:
+
+```bash
+mflow start --room my-project/main --secret "$MFLOW_SECRET" --signaling ws://localhost:8787
+```
+
+Another machine on the same WiFi/LAN:
+
+```bash
+mflow start --room my-project/main --secret "$MFLOW_SECRET" --signaling ws://192.168.1.50:8787
+```
+
+Docker and hosting options are documented in [Self-hosting overview](./docs/self-hosting.md) and [Bun + Docker](./docs/bun-docker.md).
+
 ## Public relay limits
 
-The shared relay is a free fair-use service for demos, onboarding, and small agent swarms.
+The shared relay is a legacy free fair-use service for demos and onboarding, not the preferred default for reliable work. Prefer a local/LAN relay or a relay you host yourself.
 
 | Limit | Default |
 |---|---:|
@@ -491,8 +528,8 @@ Read the full [security model](./docs/security-model.md).
 Current:
 
 - CLI-first room + secret sync.
-- Public fair-use relay.
-- Self-hosted Bun/Docker/Deno Deploy relay.
+- Local-first room + secret sync with user-controlled relays.
+- Self-hosted Bun/Docker/LAN/VPS relay; Deno Deploy remains legacy/demo-oriented.
 - Dashboard status and hosted settings/API keys.
 - MCP control surface for status, peers, pause/resume, and locks.
 

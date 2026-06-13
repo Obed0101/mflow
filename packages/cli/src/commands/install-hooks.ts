@@ -474,29 +474,31 @@ This scaffold prepares repo-local MendCode integration files for mflow. It does 
 
 1. Show current state: disabled, enabled but stopped, or running.
 2. If disabled, ask the user to activate mflow.
-3. Ask for relay:
-   - Public relay: https://mflow-signal.obed0101.deno.net/
-   - Custom/self-hosted relay URL
-4. If public relay is selected, show this warning:
-
-   Public mflow relay is a shared fair-use service. It is good for demos, small swarms, and onboarding. It has peer, message, rate, active-room, idle-timeout, and dashboard-history limits. For larger teams, private code, production reliability, or custom limits, use a self-hosted mflow relay URL.
-
-5. Ask for or generate the room name and room secret.
-6. Ask whether to store the room secret locally. Never print it.
-7. Configure MCP for the active repo/user with pnpm only.
+3. Ask for relay mode:
+   - Local mflow relay (recommended): run or connect to an mflow relay on this computer or the local WiFi/LAN.
+   - Remote relay URL: use a user/team-hosted relay URL.
+4. Do not present the old public Deno relay as the default free option. If shown at all, label it legacy/demo-only and unreliable.
+5. If local mflow is selected, show detected mflow relays on the local WiFi/LAN, including relays running on another PC. Let the user choose one or start a relay on this machine.
+6. Ask for or generate the room name and room secret.
+7. Ask whether to store the room secret locally. Never print it.
+8. Configure MCP for the active repo/user with pnpm only.
 
 ## MCP command shape
 
 \`\`\`bash
-mend mcp add mflow -- pnpm --package=mflow-cli dlx mflow-mcp --root /absolute/path/to/repo
+pnpm dlx --package mflow-cli mflow-mcp --root /absolute/path/to/repo
 \`\`\`
 
-If MendCode has a native MCP config API, use this equivalent config instead of shelling out:
+MendCode's current \`mcp add\` command is interactive. For product code, use the native config API or write this equivalent local MCP config:
 
 \`\`\`json
 {
-  "command": "pnpm",
-  "args": ["--package=mflow-cli", "dlx", "mflow-mcp", "--root", "/absolute/path/to/repo"]
+  "mcp": {
+    "mflow": {
+      "type": "local",
+      "command": ["pnpm", "dlx", "--package", "mflow-cli", "mflow-mcp", "--root", "/absolute/path/to/repo"]
+    }
+  }
 }
 \`\`\`
 
@@ -526,10 +528,10 @@ Pause before commit/rebase/reset and resume afterward.
 `;
 
 const MENDCODE_MCP_EXAMPLE = `${JSON.stringify({
-  mcpServers: {
+  mcp: {
     mflow: {
-      command: "pnpm",
-      args: ["--package=mflow-cli", "dlx", "mflow-mcp", "--root", "/absolute/path/to/repo"],
+      type: "local",
+      command: ["pnpm", "dlx", "--package", "mflow-cli", "mflow-mcp", "--root", "/absolute/path/to/repo"],
     },
   },
 }, null, 2)}\n`;

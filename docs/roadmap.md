@@ -5,13 +5,14 @@ mflow is early OSS infrastructure for synchronized local worktrees. This roadmap
 ## Now
 
 - CLI-first room + secret sync.
-- Public fair-use relay.
-- Self-hosted Bun/Docker/Deno Deploy relay.
+- Local-first room + secret sync with user-controlled relays.
+- Self-hosted Bun/Docker/LAN/VPS relay; Deno Deploy remains legacy/demo-oriented.
 - Dashboard status view and hosted settings/API keys.
 - MCP control surface for status, peers, pause/resume, and locks.
 
 ## Next
 
+- Add simple local relay commands such as `mflow relay start --local` and LAN discovery such as `mflow relay scan --lan`.
 - Harden npm packaging and install tests for every release.
 - Improve MCP install UX for Codex, Claude Code, Cursor, opencode, and custom clients.
 - Add stronger room-level dashboard views without exposing plaintext secrets.

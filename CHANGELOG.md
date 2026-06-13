@@ -4,6 +4,14 @@ All notable changes to mflow will be documented in this file.
 
 This project follows a simple public release format. Dates use ISO format.
 
+## [0.1.13] - 2026-06-12
+
+### Changed
+
+- Shifted MendCode guidance to local-first relay setup instead of public Deno relay onboarding.
+- Documented local/LAN relay, Docker, and WebSocket-capable hosting paths for free self-hosted mflow usage.
+- Updated the generated MendCode control guide to offer local mflow relay or remote relay URL.
+
 ## [0.1.12] - 2026-06-11
 
 ### Added

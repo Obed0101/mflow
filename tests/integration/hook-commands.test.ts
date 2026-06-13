@@ -73,9 +73,11 @@ describe("hook commands", () => {
 
     expect(plugin).toContain("tool.execute.before");
     expect(plugin).toContain("--priority");
-    expect(control).toContain("Public mflow relay is a shared fair-use service");
-    expect(control).toContain("mend mcp add mflow -- pnpm --package=mflow-cli dlx mflow-mcp");
-    expect(mcpExample).toContain('"command": "pnpm"');
+    expect(control).toContain("Local mflow relay (recommended)");
+    expect(control).toContain("Do not present the old public Deno relay as the default free option");
+    expect(control).toContain("pnpm dlx --package mflow-cli mflow-mcp");
+    expect(mcpExample).toContain('"type": "local"');
+    expect(mcpExample).toContain('"pnpm"');
     expect(mcpExample).toContain('"mflow-mcp"');
   });
 
